@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <meta charset="UTF-8">
+    <title>卫星壁纸</title>
+    <style>
+        * {
+            -moz-box-sizing: border-box;
+            -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background-color: #22313f;
+        }
+
+        .accordion dl {
+            margin: 0;
+        }
+
+        .accordion dt>a {
+            text-align: center;
+            padding: 2em;
+            display: block;
+            text-decoration: none;
+            color: #fff;
+            transition: background-color 0.5s ease-in-out;
+        }
+
+        .accordion dd {
+            background-color: #2c3e50;
+            color: #fafafa;
+            font-size: 0.9em;
+            line-height: 1.5em;
+            margin: 0;
+            padding: 0;
+        }
+
+        .accordion dd>p {
+            padding: 1em 2em 1em 2em;
+        }
+
+        .accordion {
+            position: relative;
+            background-color: #22313f;
+            padding: 0;
+            margin: 0;
+        }
+
+        .container {
+            background-color: #22313f;
+        }
+
+        .accordionTitle {
+            background-color: #22313F;
+            border-bottom: 1px solid #2c3e50;
+        }
+
+        .accordionTitle:before {
+            content: "+";
+            font-size: 1.5em;
+            line-height: 0.5em;
+            float: left;
+            -moz-transition: -moz-transform 0.3s ease-in-out;
+            -o-transition: -o-transform 0.3s ease-in-out;
+            -webkit-transition: -webkit-transform 0.3s ease-in-out;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .accordionTitle:hover {
+            background-color: #2c3e50;
+        }
+
+        .accordionTitleActive {
+            background-color: #34495e;
+        }
+
+        .accordionTitleActive:before {
+            -webkit-transform: rotate(-225deg);
+            -moz-transform: rotate(-225deg);
+            transform: rotate(-225deg);
+        }
+
+        .accordionItem {
+            height: auto;
+            overflow: hidden;
+        }
+
+        @media all {
+            .accordionItem {
+                max-height: 80em;
+                -moz-transition: max-height 1s;
+                -o-transition: max-height 1s;
+                -webkit-transition: max-height 1s;
+                transition: max-height 1s;
+            }
+        }
+
+        @media screen and (min-width: 48em) {
+            .accordionItem {
+                max-height: 60em;
+                -moz-transition: max-height 0.5s;
+                -o-transition: max-height 0.5s;
+                -webkit-transition: max-height 0.5s;
+                transition: max-height 0.5s;
+            }
+        }
+
+        .accordionItemCollapsed {
+            max-height: 0;
+        }
+
+        .animateIn {
+            -webkit-animation-name: accordionIn;
+            -webkit-animation-duration: 0.65s;
+            -webkit-animation-iteration-count: 1;
+            -webkit-animation-direction: normal;
+            -webkit-animation-timing-function: ease-in-out;
+            -webkit-animation-fill-mode: both;
+            -webkit-animation-delay: 0s;
+            -moz-animation-name: normal;
+            -moz-animation-duration: 0.65s;
+            -moz-animation-iteration-count: 1;
+            -moz-animation-direction: alternate;
+            -moz-animation-timing-function: ease-in-out;
+            -moz-animation-fill-mode: both;
+            -moz-animation-delay: 0s;
+            animation-name: accordionIn;
+            animation-duration: 0.65s;
+            animation-iteration-count: 1;
+            animation-direction: normal;
+            animation-timing-function: ease-in-out;
+            animation-fill-mode: both;
+            animation-delay: 0s;
+        }
+
+        .animateOut {
+            -webkit-animation-name: accordionOut;
+            -webkit-animation-duration: 0.75s;
+            -webkit-animation-iteration-count: 1;
+            -webkit-animation-direction: alternate;
+            -webkit-animation-timing-function: ease-in-out;
+            -webkit-animation-fill-mode: both;
+            -webkit-animation-delay: 0s;
+            -moz-animation-name: accordionOut;
+            -moz-animation-duration: 0.75s;
+            -moz-animation-iteration-count: 1;
+            -moz-animation-direction: alternate;
+            -moz-animation-timing-function: ease-in-out;
+            -moz-animation-fill-mode: both;
+            -moz-animation-delay: 0s;
+            animation-name: accordionOut;
+            animation-duration: 0.75s;
+            animation-iteration-count: 1;
+            animation-direction: alternate;
+            animation-timing-function: ease-in-out;
+            animation-fill-mode: both;
+            animation-delay: 0s;
+        }
+
+        @-webkit-keyframes accordionIn {
+            0% {
+                opacity: 0;
+                -webkit-transform: scale(0.8);
+            }
+
+            100% {
+                opacity: 1;
+                -webkit-transform: scale(1);
+            }
+        }
+
+        @-moz-keyframes accordionIn {
+            0% {
+                opacity: 0;
+                -moz-transform: scale(0.8);
+            }
+
+            100% {
+                opacity: 1;
+                -moz-transform: scale(1);
+            }
+        }
+
+        @keyframes accordionIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @-webkit-keyframes accordionOut {
+            0% {
+                opacity: 1;
+                -webkit-transform: scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                -webkit-transform: scale(0.8);
+            }
+        }
+
+        @-moz-keyframes accordionOut {
+            0% {
+                opacity: 1;
+                -moz-transform: scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                -moz-transform: scale(0.8);
+            }
+        }
+
+        @keyframes accordionOut {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+        }
+
+        @font-face {
+            font-family: "iconfont";
+            /* Project id 2579115 */
+            src: url('iconfont.woff2') format('woff2'),
+                url('iconfont.woff') format('woff'),
+                url('iconfont.ttf') format('truetype');
+        }
+
+        .iconfont {
+            font-family: "iconfont" !important;
+            font-size: 1.5em;
+            vertical-align: middle;
+            font-style: normal;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .icon-home:before {
+            content: "\e6f3";
+        }
+
+        .icon-setting:before {
+            content: "\e60f";
+        }
+
+        .icon-start:before {
+            content: "\e62f";
+        }
+
+        .op-buttons{
+            display: block;
+            height: 3em;
+        }
+
+        #info{
+            /* clear: both; */
+            color: rgba(255, 255, 255, .7);
+            /* text-shadow: 2px 2px 5px black; */
+            line-height: 1.8em;
+            font-size: 0.8em;
+            padding-left: 2.5em;
+        }
+        .thumbnail{
+            justify-content: center;
+            align-items: center;
+            display: flex;
+            padding-top: 4em;
+            padding-bottom: 4em;
+        }
+        #thumbnail{
+            border-radius: 1em;
+            width: 20em;
+        }
+
+        .pure-button {
+            display: inline-block;
+            zoom: 1;
+            line-height: normal;
+            white-space: nowrap;
+            vertical-align: middle;
+            text-align: center;
+            cursor: pointer;
+            -webkit-user-drag: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+        }
+
+        .pure-button{
+            width: 10em;
+        }
+
+        .pure-button::-moz-focus-inner {
+            padding: 0;
+            border: 0;
+        }
+
+        .pure-button-group {
+            letter-spacing: -.31em;
+            text-rendering: optimizespeed;
+        }
+
+        .opera-only :-o-prefocus,.pure-button-group {
+            word-spacing: -.43em;
+        }
+
+        .pure-button-group .pure-button {
+            letter-spacing: normal;
+            word-spacing: normal;
+            vertical-align: top;
+            text-rendering: auto;
+        }
+
+        .pure-button {
+            font-family: inherit;
+            font-size: 100%;
+            padding: .5em 1em;
+            color: #444;
+            color: rgba(0,0,0,.8);
+            border: 1px solid #999;
+            border: none transparent;
+            background-color: #e6e6e6;
+            text-decoration: none;
+            border-radius: 2px;
+        }
+
+        .pure-button-hover,.pure-button:focus,.pure-button:hover {
+            background-image: -webkit-gradient(linear,left top,left bottom,from(transparent),color-stop(40%,rgba(0,0,0,.05)),to(rgba(0,0,0,.1)));
+            background-image: -webkit-linear-gradient(transparent,rgba(0,0,0,.05) 40%,rgba(0,0,0,.1));
+            background-image: linear-gradient(transparent,rgba(0,0,0,.05) 40%,rgba(0,0,0,.1));
+        }
+
+        .pure-button:focus {
+            outline: 0;
+        }
+
+        .pure-button-active,.pure-button:active {
+            -webkit-box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset,0 0 6px rgba(0,0,0,.2) inset;
+            box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset,0 0 6px rgba(0,0,0,.2) inset;
+            border-color: #000;
+        }
+
+        .pure-button-disabled,.pure-button-disabled:active,.pure-button-disabled:focus,.pure-button-disabled:hover,.pure-button[disabled] {
+            border: none;
+            background-image: none;
+            opacity: .4;
+            cursor: not-allowed;
+            -webkit-box-shadow: none;
+            box-shadow: none;
+            pointer-events: none;
+        }
+
+        .pure-button-hidden {
+            display: none;
+        }
+
+        .pure-button-primary,.pure-button-selected,a.pure-button-primary,a.pure-button-selected {
+            background-color: #0078e7;
+            color: #fff;
+        }
+
+        .pure-button-group .pure-button {
+            margin: 0;
+            border-radius: 0;
+            border-right: 1px solid #111;
+            border-right: 1px solid rgba(0,0,0,.2);
+        }
+
+        .pure-button-group .pure-button:first-child {
+            border-top-left-radius: 2px;
+            border-bottom-left-radius: 2px;
+        }
+
+        .pure-button-group .pure-button:last-child {
+            border-top-right-radius: 2px;
+            border-bottom-right-radius: 2px;
+            border-right: none;
+        }
+
+        .button-success,
+        .button-error,
+        .button-warning,
+        .button-secondary {
+            color: white;
+            border-radius: 4px;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+        }
+
+        .button-success {
+            background: rgb(28, 184, 65); /* this is a green */
+        }
+
+        .button-error {
+            background: rgb(202, 60, 60); /* this is a maroon */
+        }
+
+        .button-warning {
+            background: rgb(223, 117, 20); /* this is an orange */
+        }
+
+        .button-secondary {
+            background: rgb(66, 184, 221); /* this is a light blue */
+        }
+
+        #qrcode{
+            position: fixed;
+            z-index:  100;
+            width: 100%;
+            height: 100%;
+            background-color: #22313f;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #aaa;
+            font-size: 0.8em;
+            line-height: 1.5em;
+            cursor: pointer;
+        }
+        .sm-qrcode{
+            border-radius: 1em;
+            width: 7em;
+            height: 7em;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="qrcode" onclick="hideQrcode()">
+        <div>
+            <img src="data:image/png;base64,{qrcode_base64}" />
+            <p>请使用Edge浏览器、Firefox、谷歌浏览器<br />或用手机扫描此二维码打开配置界面<br />点击关闭</p>
+        </div>
+    </div>
+    <div class="container">
+        <div class="accordion">
+            <dl>
+                <dt><a class="accordionTitle" href="#">首页<span class="iconfont icon-home"></span></a></dt>
+                <dd class="accordionItem accordionItemCollapsed">
+                    <p> <button class="button-success pure-button" id="btn_home">项目主页</button> &nbsp; <button class="button-success pure-button" id="btn_github">Github</button> </p>
+                </dd>
+                <dt><a href="#" class="accordionTitle">设置<span class="iconfont icon-setting"></span></a></dt>
+                <dd class="accordionItem accordionItemCollapsed">
+                    <p>
+                        <button class="button-success pure-button" id="btn_satellite_name">卫星：</button>
+                        &nbsp; <button class="button-success pure-button" id="btn_interval">更新频率</button>
+                    </p>
+                    <p style="padding-top: 0px;">
+                        <button class="button-success pure-button" id="btn_type">壁纸样式</button>
+                        &nbsp; <button class="button-secondary pure-button" id="btn_download">立即更新</button>
+                    </p>
+                    <p style="padding-top: 0px;">
+                        <button class="button-success pure-button" id="btn_startup">开启启动[关]</button>
+                    </p>
+                    <p style="padding-top: 0px;" id="info"></p>
+                    <p style="padding-top: 0px;" id="info">
+                        <img class="sm-qrcode" src="data:image/png;base64,{qrcode_base64}" />
+                        <br />&nbsp;扫码打开网页
+                    </p>
+                </dd>
+            </dl>
+        </div>
+        <div class="thumbnail"><img id="thumbnail" src="" /></div>
+    </div>
+    <script>
+        function isIE(){
+            if (window.navigator.userAgent.indexOf("MSIE")>=1) 
+            return true; 
+                else
+            return false; 
+        }
+        function hideQrcode(){
+            if(!isIE()){
+                btn('qrcode').style.display = 'none';
+            }
+        }
+        hideQrcode();
+
+        (function (window) {
+            'use strict';
+            function classReg(className) {
+                return new RegExp("(^|\\s+)" + className + "(\\s+|$)");
+            }
+            var hasClass, addClass, removeClass;
+
+            if ('classList' in document.documentElement) {
+                hasClass = function (elem, c) {
+                    return elem.classList.contains(c);
+                };
+                addClass = function (elem, c) {
+                    elem.classList.add(c);
+                };
+                removeClass = function (elem, c) {
+                    elem.classList.remove(c);
+                };
+            }
+            else {
+                hasClass = function (elem, c) {
+                    return classReg(c).test(elem.className);
+                };
+                addClass = function (elem, c) {
+                    if (!hasClass(elem, c)) {
+                        elem.className = elem.className + ' ' + c;
+                    }
+                };
+                removeClass = function (elem, c) {
+                    elem.className = elem.className.replace(classReg(c), ' ');
+                };
+            }
+
+            function toggleClass(elem, c) {
+                var fn = hasClass(elem, c) ? removeClass : addClass;
+                fn(elem, c);
+            }
+            var classie = {
+                hasClass: hasClass,
+                addClass: addClass,
+                removeClass: removeClass,
+                toggleClass: toggleClass,
+                has: hasClass,
+                add: addClass,
+                remove: removeClass,
+                toggle: toggleClass
+            };
+            if (typeof define === 'function' && define.amd) {
+                define(classie);
+            } else {
+                window.classie = classie;
+            }
+        })(window);
+        var $ = function (selector) {
+            return document.querySelector(selector);
+        }
+        var accordion = $('.accordion');
+        accordion.addEventListener("click", function (e) {
+            e.stopPropagation();
+            e.preventDefault();
+            if (e.target && e.target.nodeName == "A") {
+                var classes = e.target.className.split(" ");
+                if (classes) {
+                    for (var x = 0; x < classes.length; x++) {
+                        if (classes[x] == "accordionTitle") {
+                            var title = e.target;
+                            var content = e.target.parentNode.nextElementSibling;
+                            classie.toggle(title, 'accordionTitleActive');
+                            if (classie.has(content, 'accordionItemCollapsed')) {
+                                if (classie.has(content, 'animateOut')) {
+                                    classie.remove(content, 'animateOut');
+                                }
+                                classie.add(content, 'animateIn');
+                            } else {
+                                classie.remove(content, 'animateIn');
+                                classie.add(content, 'animateOut');
+                            }
+                            classie.toggle(content, 'accordionItemCollapsed');
+                        }
+                    }
+                }
+            }
+        });
+
+        async function get_str(url){
+            let resp = await fetch(url);
+            let str = await resp.text();
+            console.log("get "+url, str);
+            return str;
+        }
+
+        async function post_str(url, s){
+            let resp = await fetch(url, { body: s, method: 'POST' });
+            let str = await resp.text();
+            console.log('post_str', url, s, '返回:', str);
+            return str;
+        }
+
+        function btn(id){
+            return document.getElementById(id);
+        }
+
+        function get_update_interval(){
+            get_str("update_interval").then(function(s){
+                console.log("当前更新频率", s);
+                btn("btn_interval").innerText = '更新频率：'+s+'分钟'
+            });
+        }
+        get_update_interval();
+
+        function get_display_type(){
+            get_str("display_type").then(function(s){
+                console.log("当前壁纸样式", s);
+                btn("btn_type").innerText = '壁纸样式：'+(s=='1'?'整张':'半张');
+            });
+        }
+        get_display_type();
+
+        async function get_satellite_name(){
+            var cfg = JSON.parse(await get_str('config'));
+            btn("btn_satellite_name").innerText = '卫星：'+(cfg.satellite_name == 'h8'?'向日葵8号':'风云4号');
+        }
+        get_satellite_name();
+
+        async function is_downloading(){
+            var res = await get_str("is_downloading");
+            return "true" == res;
+        }
+
+        btn("btn_interval").onclick = async function(){
+            var s = await post_str('update_interval', '');
+            btn("btn_interval").innerText = '更新频率：'+s+'分钟';
+        };
+
+        btn("btn_type").onclick = async function(){
+            var s = await post_str('display_type', '');
+            btn("btn_type").innerText = '壁纸样式：'+(s=='1'?'整张':'半张');
+        };
+
+        btn('btn_download').onclick = async function(){
+            if(await is_downloading()){
+                alert("壁纸正在下载中~");
+                return;
+            }
+            post_str('download', '');
+        };
+
+        btn('btn_satellite_name').onclick = async function(){
+            var cfg = JSON.parse(await get_str('config'));
+            cfg.satellite_name = cfg.satellite_name == 'h8'?'fy4a':'h8';
+            await post_str('config', JSON.stringify(cfg));
+            await get_satellite_name();
+        };
+        
+        async function get_download_time(){
+            try{
+                var t = JSON.parse(await get_str('config'));
+                btn('info').innerHTML = 
+                    '当前壁纸: '+t.current_wallpaper_date + '<br />' +
+                    '本地文件: '+t.current_wallpaper_file + '<br />' +
+                    '风云4号A星下载地址: '+t.download_url_fy4a + '<br />' +
+                    '向日葵8号下载地址: '+t.download_url_h8 + '<br />' +
+                    '配置文件: '+t.config_path + '<br />'
+                    ;
+                //展示略缩图
+                var thumbnail = btn('thumbnail');
+                if(t.current_wallpaper_thumbnail && t.current_wallpaper_thumbnail.length > 0){
+                    thumbnail.style.display = 'block';
+                    thumbnail.src = 'data:image/png;base64,'+t.current_wallpaper_thumbnail;
+                }else{
+                    thumbnail.style.display = 'none';
+                }
+            }catch(e){
+                console.error(e);
+            }
+        }
+        get_download_time();
+
+        //开机启动
+        function get_startup(){
+            get_str("is_startup").then(function(s){
+                console.log("是否开机启动:", s);
+                btn("btn_startup").innerText = '开机启动['+(s=='true'?'YES':'NO')+']';
+            });
+        }
+        function set_startup(){
+            get_str("set_startup").then(function(s){
+                console.log("是否开机启动:", s);
+                btn("btn_startup").innerText = '开机启动['+(s=='true'?'YES':'NO')+']';
+            });
+        }
+        get_startup();
+        btn("btn_startup").onclick = set_startup;
+    </script>
+</body>
+
+</html>
