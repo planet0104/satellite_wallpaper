@@ -1,5 +1,10 @@
 # satellite_wallpaper
- 卫星壁纸
+
+## 实时卫星桌面壁纸
+
+实时下载卫星云图，更新到桌面壁纸和锁屏壁纸。
+
+支持我国的风云4号A星和日本的向日葵8号气象卫星。
 
 <img src="https://www.ccfish.run/satellite_wallpaper/fy4a.png" />
 
