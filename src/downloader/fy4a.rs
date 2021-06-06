@@ -7,6 +7,9 @@ use log::info;
 
 use crate::{config::{self, Config}, downloader::format_time_str};
 
+//http://rsapp.nsmc.org.cn/geofy/
+
+
 /// 下载4x4、2x2的图
 pub fn download<C>(
     url: &str,

@@ -55,7 +55,7 @@ pub fn load() -> Config {
                 current_wallpaper_date: String::new(),
                 current_wallpaper_file: String::new(),
                 config_path: String::new(),
-                satellite_name: String::from("h8"),
+                satellite_name: String::from("fy4a"),
                 current_wallpaper_thumbnail: None,
             }
         }
