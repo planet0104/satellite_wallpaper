@@ -2,33 +2,44 @@
 name = "satellite_wallpaper"
 version = "1.0.0"
 authors = ["Jia Ye <planet0104@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-image = "0.23.14"
+image = "0.24.7"
 anyhow = "1"
-once_cell = "1.7.2"
-tiny_http = "0.8.2"
-toml = "0.5.8"
+once_cell = "1.18.0"
+tiny_http = "0.12.0"
+toml = "0.8.0"
 serde = { version = "1.0", features = ["derive"] }
-windows = "0.10.0"
-chrono = "0.4"
-wallpaper = "2.0.1"
+chrono = "0.4.31"
+wallpaper = "3.2.0"
 log = "0.4"
-env_logger = "0.8.3"
-dirs = "3.0"
+env_logger = "0.10.0"
+dirs = "5.0.1"
 serde_json = "1.0"
-base64 = "0.13.0"
-futures = "0.3.5"
-minreq = { version="2.4.0", features=["https"]}
-qrcode = "0.12.0"
+base64 = "0.21.4"
+futures = "0.3.28"
+minreq = { version="2.10.0", features=["https"]}
+qrcode-rs = "0.1"
 local_ipaddress = "0.1.3"
 
+[dependencies.windows]
+version = "0.51"
+features = [
+    "Win32_UI_Shell",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_LibraryLoader",
+    "Win32_Graphics_Gdi",
+    "Storage",
+    "System_UserProfile",
+    "Foundation"
+]
+
 [build-dependencies]
-windows = "0.10.0"
-winres = "0.1.11"
+winres = "0.1.12"
 
 [profile.release]
 lto = true

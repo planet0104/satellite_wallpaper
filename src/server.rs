@@ -1,13 +1,18 @@
+use std::io;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
+use base64::alphabet;
+use base64::engine;
+use base64::engine::GeneralPurposeConfig;
 use image::ColorType;
+use image::EncodableLayout;
 use image::ImageEncoder;
 use image::Rgba;
-use image::png::PngEncoder;
+use image::codecs::png::PngEncoder;
 use log::error;
 use log::info;
-use qrcode::QrCode;
+use qrcode_rs::QrCode;
 use tiny_http::Method;
 
 use crate::app;
@@ -58,7 +63,17 @@ pub fn start_http_server(){
     let mut data = vec![];
     let encoder = PngEncoder::new(&mut data);
     encoder.write_image(&image, image.width(), image.height(), ColorType::Rgba8).unwrap();
-    let qrcode_image = base64::encode(&data);
+
+    let mut encode_buf = vec![];
+    let mut reader: &[u8] = data.as_bytes();
+
+    let engine = engine::GeneralPurpose::new(&alphabet::URL_SAFE, GeneralPurposeConfig::new());
+
+    let mut encoder: base64::write::EncoderWriter<'_, engine::GeneralPurpose, &mut Vec<u8>> = base64::write::EncoderWriter::new(&mut encode_buf, &engine);
+    io::copy(&mut reader, &mut encoder);
+    encoder.finish();
+
+    let qrcode_image_base64 = String::from_utf8(encode_buf).unwrap();
 
     thread::spawn(move || {
         for mut rq in server.incoming_requests() {
@@ -185,7 +200,7 @@ pub fn start_http_server(){
                 _ =>{
                     let mut html = HTML.to_string();
                     while html.contains("{qrcode_base64}"){
-                        html = html.replace("{qrcode_base64}", &qrcode_image)
+                        html = html.replace("{qrcode_base64}", &qrcode_image_base64)
                     }
                     tiny_http::Response::from_string(html).with_header(
                     "Content-Type: text/html; charset=utf-8"

@@ -1,24 +1,7 @@
-mod bindings {
-    windows::include_bindings!();
-}
 use std::{mem::{self, size_of}, path::Path};
-use log::info;
 use anyhow::{anyhow, Result};
-
-use windows::HSTRING;
-use bindings::{
-    Windows::Win32::Graphics::Gdi::{
-        GetStockObject, UpdateWindow, HBRUSH, WHITE_BRUSH,
-    },
-    Windows::Win32::UI::DisplayDevices::{POINT, RECT},
-    Windows::Win32::System::SystemServices::*,
-    Windows::Win32::UI::Controls::LR_DEFAULTCOLOR,
-    Windows::Win32::UI::MenusAndResources::*,
-    Windows::Win32::UI::Shell::*,
-    Windows::Win32::UI::WindowsAndMessaging::*,
-    Windows::System::UserProfile::*,
-    Windows::Storage::*
-};
+use log::info;
+use windows::{Win32::{UI::{Shell::{NOTIFYICONDATAW, NIF_ICON, NIF_MESSAGE, NIF_TIP, Shell_NotifyIconW, NIM_ADD, NIM_DELETE, NIF_INFO, NIIF_NONE, NIM_MODIFY, ShellExecuteW, SHGetSpecialFolderPathW, CSIDL_STARTUP}, WindowsAndMessaging::{RegisterWindowMessageW, HMENU, IDC_ARROW, WM_RBUTTONDOWN, WM_LBUTTONDOWN, GetCursorPos, SetForegroundWindow, TrackPopupMenu, TPM_RETURNCMD, PostMessageW, WM_QUIT, PostQuitMessage, SendMessageW, WM_CREATE, DefWindowProcW, WNDCLASSW, LoadCursorW, IDI_APPLICATION, LoadIconW, CS_HREDRAW, CS_VREDRAW, RegisterClassW, CreateWindowExW, WS_EX_TOOLWINDOW, WS_POPUP, CW_USEDEFAULT, MSG, SHOW_WINDOW_CMD, ShowWindow, GetMessageW, TranslateMessage, DispatchMessageW, WM_USER, HICON, LoadImageW, IMAGE_ICON, LR_DEFAULTCOLOR, CreatePopupMenu, AppendMenuW, MF_STRING, SW_SHOWNORMAL, GetDesktopWindow, GetWindowRect}}, Foundation::{HWND, WPARAM, LPARAM, LRESULT, POINT, RECT, MAX_PATH}, System::LibraryLoader::GetModuleHandleW, Graphics::Gdi::{GetStockObject, WHITE_BRUSH, HBRUSH, UpdateWindow}}, core::{PWSTR, PCWSTR, HSTRING}, Storage::StorageFile, System::UserProfile::LockScreen};
 
 const IDR_EXIT: usize = 10;
 const IDR_OPEN: usize = 11;
@@ -33,12 +16,12 @@ use crate::config;
 
 use super::def::*;
 use once_cell::sync::Lazy;
-use std::{borrow::BorrowMut, ptr::null_mut, sync::Mutex};
+use std::{borrow::BorrowMut, sync::Mutex};
 
 static NOTIFY_ICON_DATA: Lazy<Mutex<NOTIFYICONDATAW>> =
     Lazy::new(|| Mutex::new(unsafe { std::mem::zeroed() }));
 static WM_TASKBAR_CREATED: Lazy<u32> =
-    Lazy::new(|| unsafe { RegisterWindowMessageW("TaskbarCreated") });
+    Lazy::new(|| unsafe { RegisterWindowMessageW(PCWSTR("TaskbarCreated\0".as_ptr() as _)) });
 static MENU_HANDLE: Lazy<Mutex<HMENU>> =
     Lazy::new(|| Mutex::new(unsafe { std::mem::zeroed() }));
 
@@ -71,30 +54,31 @@ extern "system" fn wndproc(
                         SetForegroundWindow(h_wnd); //解决在菜单外单击左键菜单不消失的问题
                                                     // EnableMenuItem(hmenu,IDR_PAUSE,MF_GRAYED);//让菜单中的某一项变灰
                         let h_menu = *MENU_HANDLE.lock().unwrap();
-                        match TrackPopupMenu(
-                            h_menu,
-                            TPM_RETURNCMD,
-                            pt.x,
-                            pt.y,
-                            0,
-                            h_wnd,
-                            null_mut(),
-                        ).0 as usize
-                        {
-                            //显示菜单并获取选项ID
-                            IDR_EXIT => {
-                                //PostMessage将消息放入消息队列后马上返回，而SendMessage直到窗口过程处理完消息后才返回
-                                delete_tray();
-                                PostMessageW(h_wnd, WM_QUIT, w_param, l_param);
-                            }
-                            IDR_OPEN => {
-                                open_in_browser();
-                            }
-                            0 => {
-                                PostMessageW(h_wnd, WM_LBUTTONDOWN, None, None);
-                            }
-                            _ => {}
-                        }
+                        open_in_browser();
+                        // match TrackPopupMenu(
+                        //     h_menu,
+                        //     TPM_RETURNCMD,
+                        //     pt.x,
+                        //     pt.y,
+                        //     0,
+                        //     h_wnd,
+                        //     None,
+                        // ) as usize
+                        // {
+                        //     //显示菜单并获取选项ID
+                        //     IDR_EXIT => {
+                        //         //PostMessage将消息放入消息队列后马上返回，而SendMessage直到窗口过程处理完消息后才返回
+                        //         delete_tray();
+                        //         PostMessageW(h_wnd, WM_QUIT, w_param, l_param);
+                        //     }
+                        //     IDR_OPEN => {
+                        //         open_in_browser();
+                        //     }
+                        //     0 => {
+                        //         PostMessageW(h_wnd, WM_LBUTTONDOWN, None, None);
+                        //     }
+                        //     _ => {}
+                        // }
                     }
                 }
                 _ => (),
@@ -124,17 +108,17 @@ extern "system" fn wndproc(
 pub fn start_app(i_cmd_show: u32) -> i32{
     crate::server::start_async();
 
-    let instance = unsafe { GetModuleHandleW(None) };
+    let instance = unsafe { GetModuleHandleW(None).unwrap() };
     // debug_assert!(instance.0 != 0);
 
     let wc = WNDCLASSW {
-        hCursor: unsafe { LoadCursorW(None, IDC_ARROW) },
-        hIcon: unsafe { LoadIconW(None, IDI_APPLICATION) },
-        hInstance: instance,
+        hCursor: unsafe { LoadCursorW(None, IDC_ARROW).unwrap() },
+        hIcon: unsafe { LoadIconW(None, IDI_APPLICATION).unwrap() },
+        hInstance: instance.into(),
         cbClsExtra: 0,
         cbWndExtra: 0,
         hbrBackground: unsafe { HBRUSH(GetStockObject(WHITE_BRUSH).0) },
-        lpszClassName: PWSTR(format!("{}\0", APP_NAME).as_ptr() as _),
+        lpszClassName: PCWSTR(format!("{}\0", APP_NAME).as_ptr() as _),
         style: CS_HREDRAW | CS_VREDRAW,
         lpfnWndProc: Some(wndproc),
         ..Default::default()
@@ -147,7 +131,7 @@ pub fn start_app(i_cmd_show: u32) -> i32{
         CreateWindowExW(
             WS_EX_TOOLWINDOW,
             wc.lpszClassName,
-            APP_NAME,
+            PCWSTR(format!("{}\0", APP_NAME).as_ptr() as _),
             WS_POPUP,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -156,7 +140,7 @@ pub fn start_app(i_cmd_show: u32) -> i32{
             None,
             None,
             instance,
-            std::ptr::null_mut(),
+            None,
         )
     };
 
@@ -165,7 +149,7 @@ pub fn start_app(i_cmd_show: u32) -> i32{
     let mut message = MSG::default();
 
     unsafe {
-        ShowWindow(handle, SHOW_WINDOW_CMD(i_cmd_show));
+        ShowWindow(handle, SHOW_WINDOW_CMD(i_cmd_show.try_into().unwrap()));
         // ShowWindow(handle, SHOW_WINDOW_CMD(1));
 
         UpdateWindow(handle);
@@ -188,9 +172,9 @@ fn to_tray(hwnd: HWND) {
         nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
         nid.uCallbackMessage = WM_USER; //自定义的消息 处理托盘图标事件
                                         //加载资源文件中的光标
-        let instance = unsafe { GetModuleHandleW(None) };
+        let instance = unsafe { GetModuleHandleW(None).unwrap() };
         nid.hIcon = HICON(unsafe {
-            LoadImageW(instance, "IC_LOGO", IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR).0
+            LoadImageW(instance, PCWSTR("IC_LOGO\0".as_ptr() as _), IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR).unwrap().0
         });
         let htip = HSTRING::from(APP_NAME);
         let tip = htip.as_wide();
@@ -200,9 +184,9 @@ fn to_tray(hwnd: HWND) {
 
     //一级菜单
     unsafe{
-        let h_menu = CreatePopupMenu();
-        AppendMenuW(h_menu, MF_STRING, IDR_OPEN, "打开");
-        AppendMenuW(h_menu, MF_STRING, IDR_EXIT, "退出");
+        let h_menu = CreatePopupMenu().unwrap();
+        AppendMenuW(h_menu, MF_STRING, IDR_OPEN, PCWSTR("打开\0".as_ptr() as _));
+        AppendMenuW(h_menu, MF_STRING, IDR_EXIT, PCWSTR("退出\0".as_ptr() as _));
         *MENU_HANDLE.lock().unwrap() = h_menu;
     }
 }
@@ -235,14 +219,14 @@ pub fn open_in_browser(){
     unsafe{
         let cfg = config::load();
         let url = format!("http://localhost:{}", cfg.server_port);
-        ShellExecuteW(None, "open", url, None, None, SW_SHOWNORMAL.0 as i32);
+        ShellExecuteW(None, PCWSTR("open\0".as_ptr() as _), PCWSTR(format!("{}\0", url).as_ptr() as _), None, None, SW_SHOWNORMAL);
     }
 }
 
 pub fn get_screen_size() -> (i32, i32){
     let hwnd = unsafe{ GetDesktopWindow() };
     let mut rect:RECT = unsafe{ mem::zeroed() };
-    if unsafe{ GetWindowRect(hwnd, &mut rect).0 != 0 }{
+    if unsafe{ GetWindowRect(hwnd, &mut rect).is_ok() }{
         (rect.right-rect.left, rect.bottom-rect.top)
     }else{
         (1920, 1080)
@@ -251,24 +235,24 @@ pub fn get_screen_size() -> (i32, i32){
 
 /// 同步设置锁屏壁纸
 pub fn set_lock_screen_image(image: &str) -> Result<()>{
-    let file = StorageFile::GetFileFromPathAsync(image)?.get()?;
-    LockScreen::SetImageFileAsync(file)?.get()?;
+    let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(image))?.get()?;
+    LockScreen::SetImageFileAsync(&file)?.get()?;
     Ok(())
 }
 
 pub fn remove_app_for_startup(app_name:&str) -> Result<()>{
     let hwnd = unsafe{ GetDesktopWindow() };
-    let mut path:[u16; MAX_PATH as usize+1] = [0; MAX_PATH as usize+1];
-    unsafe{ SHGetSpecialFolderPathW(hwnd, PWSTR(path.as_mut_ptr()), CSIDL_STARTUP as i32, false) };
+    let mut path:[u16; MAX_PATH as usize] = [0; MAX_PATH as usize];
+    unsafe{ SHGetSpecialFolderPathW(hwnd, &mut path, CSIDL_STARTUP as i32, false) };
     let path = String::from_utf16(&path)?.replace("\u{0}", "");
     std::fs::remove_file(format!("{}\\{}.url", path, app_name))?;
     Ok(())
 }
 
 pub fn register_app_for_startup(app_name:&str) -> Result<()>{
-    let hwnd = unsafe{ GetDesktopWindow() };
-    let mut path:[u16; MAX_PATH as usize+1] = [0; MAX_PATH as usize+1];
-    unsafe{ SHGetSpecialFolderPathW(hwnd, PWSTR(path.as_mut_ptr()), CSIDL_STARTUP as i32, false) };
+    let hwnd: HWND = unsafe{ GetDesktopWindow() };
+    let mut path:[u16; MAX_PATH as usize] = [0; MAX_PATH as usize];
+    unsafe{ SHGetSpecialFolderPathW(hwnd, &mut path, CSIDL_STARTUP as i32, false) };
     let path = String::from_utf16(&path)?.replace("\u{0}", "");
     let url_file = format!("{}\\{}.url", path, app_name);
     //写入url文件
@@ -285,8 +269,8 @@ pub fn register_app_for_startup(app_name:&str) -> Result<()>{
 
 pub fn is_app_registered_for_startup(app_name:&str) -> Result<bool>{
     let hwnd = unsafe{ GetDesktopWindow() };
-    let mut path:[u16; MAX_PATH as usize+1] = [0; MAX_PATH as usize+1];
-    unsafe{ SHGetSpecialFolderPathW(hwnd, PWSTR(path.as_mut_ptr()), CSIDL_STARTUP as i32, false) };
+    let mut path:[u16; MAX_PATH as usize] = [0; MAX_PATH as usize];
+    unsafe{ SHGetSpecialFolderPathW(hwnd, &mut path, CSIDL_STARTUP as i32, false) };
     let path = String::from_utf16(&path)?.replace("\u{0}", "");
     Ok(Path::new(&format!("{}\\{}.url", path, app_name)).exists())
 }
