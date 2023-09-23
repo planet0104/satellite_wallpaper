@@ -78,7 +78,7 @@ pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callb
     let mut timestamp = OffsetDateTime::now_utc().unix_timestamp();
     //减去20分钟
     timestamp -= 20 * 60 * 1000;
-    let utc = OffsetDateTime::from_unix_timestamp(timestamp/1000)?;
+    let utc = OffsetDateTime::from_unix_timestamp(timestamp)?;
     let timestr = format_time_str(&cfg.satellite_name, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute());
     info!("时间:{}", timestr);
     if cfg.current_wallpaper_date == timestr{
