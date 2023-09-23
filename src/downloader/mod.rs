@@ -1,5 +1,6 @@
 use std::{fs::{File, create_dir}, io::Read, path::Path, sync::Mutex, thread};
 use anyhow::{anyhow, Result};
+use data_encoding::BASE64;
 use image::{GenericImage, Rgba, RgbaImage, imageops::resize};
 use log::{info, error};
 use once_cell::sync::Lazy;
@@ -10,7 +11,7 @@ use crate::{app::{self, get_screen_size}, config, def::APP_NAME_E};
 
 static IS_DOWNLOADING: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 
-pub fn format_time_str(download_name:&str, d: u32, year:i32, month:u32, day:u32, hour: u32, minute:u32) -> String{
+pub fn format_time_str(download_name:&str, d: u32, year:i32, month:u8, day:u8, hour: u8, minute:u8) -> String{
     format!("{}-D{}-UTC-{}年-{}月-{}日-{}时-{:02}分", download_name, d, year, month, day, hour, (minute/15)*15)
 }
 
@@ -75,7 +76,7 @@ fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: bool, 
             let mut png_data = vec![];
             let _ = f.read_to_end(&mut png_data);
             if png_data.len() > 0{
-                cfg.current_wallpaper_thumbnail = Some(base64::encode(&png_data));
+                cfg.current_wallpaper_thumbnail = Some(BASE64.encode(&png_data));
             }
         }
     }

@@ -1,12 +1,8 @@
-use std::io;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
-use base64::alphabet;
-use base64::engine;
-use base64::engine::GeneralPurposeConfig;
+use data_encoding::BASE64;
 use image::ColorType;
-use image::EncodableLayout;
 use image::ImageEncoder;
 use image::Rgba;
 use image::codecs::png::PngEncoder;
@@ -64,17 +60,8 @@ pub fn start_http_server(){
     let encoder = PngEncoder::new(&mut data);
     encoder.write_image(&image, image.width(), image.height(), ColorType::Rgba8).unwrap();
 
-    let mut encode_buf = vec![];
-    let mut reader: &[u8] = data.as_bytes();
-
-    let engine = engine::GeneralPurpose::new(&alphabet::URL_SAFE, GeneralPurposeConfig::new());
-
-    let mut encoder: base64::write::EncoderWriter<'_, engine::GeneralPurpose, &mut Vec<u8>> = base64::write::EncoderWriter::new(&mut encode_buf, &engine);
-    io::copy(&mut reader, &mut encoder);
-    encoder.finish();
-
-    let qrcode_image_base64 = String::from_utf8(encode_buf).unwrap();
-
+    let qrcode_image_base64 = BASE64.encode(&data);
+    // info!("qrcode_image_base64={qrcode_image_base64}");
     thread::spawn(move || {
         for mut rq in server.incoming_requests() {
             let url = rq.url();

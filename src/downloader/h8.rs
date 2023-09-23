@@ -1,7 +1,7 @@
 use anyhow::Result;
-use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
 use image::{GenericImage, RgbaImage};
 use log::info;
+use time::OffsetDateTime;
 
 use crate::{config::{self, Config}, downloader::format_time_str};
 
@@ -10,10 +10,10 @@ pub fn download<C>(
     url: &str,
     d: u32,
     year: i32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    ten_minute: u32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    ten_minute: u8,
     callback: C,
 ) -> Result<RgbaImage>
 where
@@ -62,10 +62,10 @@ fn download_image(url: &str) -> Result<RgbaImage> {
 fn format_url(
     url: &str,
     year: i32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    ten_minute: u32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    ten_minute: u8,
     d: u32,
     x: u32,
     y: u32,
@@ -75,11 +75,11 @@ fn format_url(
 
 /// 下载最新图片, 20分钟之前
 pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
-    let mut timestamp = Utc::now().timestamp_millis();
+    let mut timestamp = OffsetDateTime::now_utc().unix_timestamp();
     //减去20分钟
     timestamp -= 20 * 60 * 1000;
-    let utc = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp/1000, 0), Utc);
-    let timestr = format_time_str(&cfg.satellite_name, d, utc.year(), utc.month(), utc.day(), utc.hour(), utc.minute());
+    let utc = OffsetDateTime::from_unix_timestamp(timestamp/1000)?;
+    let timestr = format_time_str(&cfg.satellite_name, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute());
     info!("时间:{}", timestr);
     if cfg.current_wallpaper_date == timestr{
         info!("壁纸无需重复下载");
@@ -87,5 +87,5 @@ pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callb
     }
     cfg.current_wallpaper_date = timestr;
     config::save(cfg);
-    Ok(Some(download(&cfg.download_url_h8, d, utc.year(), utc.month(), utc.day(), utc.hour(), utc.minute(), callback)?))
+    Ok(Some(download(&cfg.download_url_h8, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute(), callback)?))
 }

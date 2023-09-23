@@ -72,7 +72,7 @@ pub fn save(cfg: &mut Config) {
 }
 
 fn get_config_file_path() -> String {
-    let cfg_file_name = &format!("{}.toml", APP_NAME_E);
+    let cfg_file_name = &format!("{}{}.toml", APP_NAME_E, env!("CARGO_PKG_VERSION"));
     let mut cfg_path_name = cfg_file_name.to_string();
     if let Some(cfg_dir) = dirs::config_dir(){
         if let Some(cfg_dir) = cfg_dir.to_str(){

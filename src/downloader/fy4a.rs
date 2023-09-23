@@ -1,9 +1,9 @@
-use std::{ops::Sub};
+use std::{ops::Sub, time::Duration};
 
 use anyhow::Result;
-use chrono::{Datelike, FixedOffset, TimeZone, Timelike, Utc};
 use image::{GenericImage, RgbaImage};
 use log::info;
+use time::{OffsetDateTime, Date};
 
 use crate::{config::{self, Config}, downloader::format_time_str};
 
@@ -15,10 +15,10 @@ pub fn download<C>(
     url: &str,
     d: u32,
     year: i32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    minute: u32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
     callback: C,
 ) -> Result<RgbaImage>
 where
@@ -58,10 +58,10 @@ pub fn download_image(url: &str) -> Result<RgbaImage> {
 pub fn format_url(
     url: &str,
     year: i32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    minute: u32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
     d: u32,
     x: u32,
     y: u32,
@@ -76,23 +76,26 @@ pub fn format_url(
 pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
     
     // 从当前时间以15分钟倒推，查询最后可下载的图片
-    let now = Utc::now();
-    let hour = Utc.ymd(now.year(), now.month(), now.day()).and_hms(now.hour(), (now.minute()/15)*15, 0);
-    let mut time = hour.sub(FixedOffset::east(60*15));
+    let now = OffsetDateTime::now_utc();
+    let today = Date::from_calendar_date(now.year(), now.month(), now.day())?;
+    let hour = today.with_hms(now.hour(), (now.minute()/15)*15, 0)?;
+
+    let mut time = hour.sub(Duration::from_secs(60*15));
+    // let mut time = hour.sub();
 
     let mut try_times = 0;
     while try_times < 4{
         //尝试下载最新一张图片, 递减15分钟
         if download_image(&format_url(
-            &cfg.download_url_fy4a, time.year(), time.month(), time.day(), time.hour(), time.minute(), 1, 0, 0)).is_err(){
+            &cfg.download_url_fy4a, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), 1, 0, 0)).is_err(){
                 info!("卫星图片不存在，尝试下载更早的图片.");
-                time = time.sub(FixedOffset::east(60*15));
+                time = time.sub(Duration::from_secs(60*15));
                 try_times += 1;
         }else{
             break;
         }
     }
-    let timestr = format_time_str(&cfg.satellite_name, d, time.year(), time.month(), time.day(), time.hour(), time.minute());
+    let timestr = format_time_str(&cfg.satellite_name, d, time.year(), time.month() as u8, time.day(), time.hour(), time.minute());
     info!("时间:{}", timestr);
     if cfg.current_wallpaper_date == timestr{
         info!("壁纸无需重复下载");
@@ -100,5 +103,5 @@ pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callb
     }
     cfg.current_wallpaper_date = timestr;
     config::save(cfg);
-    Ok(Some(download(&cfg.download_url_fy4a, d, time.year(), time.month(), time.day(), time.hour(), time.minute(), callback)?))
+    Ok(Some(download(&cfg.download_url_fy4a, d, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), callback)?))
 }
