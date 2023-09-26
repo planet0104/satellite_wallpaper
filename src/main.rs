@@ -10,6 +10,7 @@ mod downloader;
 mod def;
 mod server;
 mod app;
+mod ui;
 
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tray_icon::{
@@ -17,7 +18,8 @@ use tray_icon::{
     TrayIconBuilder, TrayIconEvent, ClickType,
 };
 
-use crate::app::open_in_browser;
+// use crate::app::open_in_browser;
+use crate::app::open_main_window;
 
 fn main() -> Result<()> {
     env_logger::Builder::new().filter_level(LevelFilter::Info).init();
@@ -55,7 +57,7 @@ fn main() -> Result<()> {
     //弹出气泡
     show_bubble("已启动");
     //在浏览器打开
-    open_in_browser();
+    open_main_window();
 
     event_loop.run(move |_event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -63,7 +65,7 @@ fn main() -> Result<()> {
         if let Ok(MenuEvent { id }) = menu_channel.try_recv() {
             if id.0 == "1001"{
                 //打开
-                open_in_browser();
+                open_main_window();
             }else{
                 //退出
                 *control_flow = ControlFlow::Exit;
@@ -72,7 +74,7 @@ fn main() -> Result<()> {
         
         if let Ok(TrayIconEvent {click_type, id: _, x: _, y: _, icon_rect: _ }) = tray_channel.try_recv(){
             if let ClickType::Left = click_type{
-                open_in_browser();
+                open_main_window();
             }
         }
     });

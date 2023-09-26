@@ -1,5 +1,6 @@
 use std::{mem, path::Path, ffi::OsStr, os::windows::prelude::OsStrExt};
 use anyhow::{anyhow, Result};
+use log::info;
 use windows::{Win32::{UI::{Shell::{NOTIFYICONDATAW, Shell_NotifyIconW, NIF_INFO, NIIF_NONE, NIM_MODIFY, ShellExecuteW, SHGetSpecialFolderPathW, CSIDL_STARTUP}, WindowsAndMessaging::{SW_SHOWNORMAL, GetDesktopWindow, GetWindowRect}}, Foundation::{HWND, RECT, MAX_PATH}}, core::{PCWSTR, HSTRING}, Storage::StorageFile, System::UserProfile::LockScreen};
 
 static TEMPLATE:&str = r"[InternetShortcut]
@@ -39,6 +40,15 @@ pub fn open_in_browser(){
         let url = format!("http://localhost:{}", cfg.server_port);
         ShellExecuteW(None, PCWSTR(create_pcwstr("open").as_ptr()), PCWSTR(create_pcwstr(&format!("{}\0", url)).as_ptr()), None, None, SW_SHOWNORMAL);
     }
+}
+
+pub fn open_main_window(){
+    std::thread::spawn(||{
+        use slint::ComponentHandle;
+        info!("启动窗口...");
+        crate::ui::Main::new().unwrap().run().unwrap();
+        info!("窗口关闭");
+    });
 }
 
 fn create_pcwstr(s: &str) -> Vec<u16> {
