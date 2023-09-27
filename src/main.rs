@@ -2,9 +2,9 @@
 
 use std::time::Duration;
 use anyhow::Result;
-use app::show_bubble;
+use app::{open_main_window, start_main_window};
 use def::APP_NAME;
-use log::LevelFilter;
+use log::{LevelFilter, info};
 mod config;
 mod downloader;
 mod def;
@@ -18,11 +18,19 @@ use tray_icon::{
     TrayIconBuilder, TrayIconEvent, ClickType,
 };
 
-// use crate::app::open_in_browser;
-use crate::app::open_main_window;
-
 fn main() -> Result<()> {
     env_logger::Builder::new().filter_level(LevelFilter::Info).init();
+
+    let args: Vec<String> = std::env::args().collect();
+    for arg in &args[1..] {
+        let arg = arg.to_lowercase();
+        if arg.starts_with("/c") {
+            //打开设置页面
+            info!("收到 /c参数，打开窗口");
+            open_main_window();
+            return Ok(());
+        }
+    }
 
     crate::server::start_async();
 
@@ -54,10 +62,8 @@ fn main() -> Result<()> {
         }
     });
 
-    //弹出气泡
-    show_bubble("已启动");
-    //在浏览器打开
-    open_main_window();
+    //打开窗口
+    start_main_window();
 
     event_loop.run(move |_event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -65,7 +71,7 @@ fn main() -> Result<()> {
         if let Ok(MenuEvent { id }) = menu_channel.try_recv() {
             if id.0 == "1001"{
                 //打开
-                open_main_window();
+                start_main_window();
             }else{
                 //退出
                 *control_flow = ControlFlow::Exit;
@@ -74,7 +80,7 @@ fn main() -> Result<()> {
         
         if let Ok(TrayIconEvent {click_type, id: _, x: _, y: _, icon_rect: _ }) = tray_channel.try_recv(){
             if let ClickType::Left = click_type{
-                open_main_window();
+                start_main_window();
             }
         }
     });

@@ -1,4 +1,4 @@
-use std::{mem, path::Path, ffi::OsStr, os::windows::prelude::OsStrExt};
+use std::{mem, path::Path, ffi::OsStr, os::windows::prelude::OsStrExt, process::Command};
 use anyhow::{anyhow, Result};
 use log::info;
 use windows::{Win32::{UI::{Shell::{NOTIFYICONDATAW, Shell_NotifyIconW, NIF_INFO, NIIF_NONE, NIM_MODIFY, ShellExecuteW, SHGetSpecialFolderPathW, CSIDL_STARTUP}, WindowsAndMessaging::{SW_SHOWNORMAL, GetDesktopWindow, GetWindowRect}}, Foundation::{HWND, RECT, MAX_PATH}}, core::{PCWSTR, HSTRING}, Storage::StorageFile, System::UserProfile::LockScreen};
@@ -11,29 +11,6 @@ IconFile=--
 
 use crate::config;
 
-use super::def::*;
-use once_cell::sync::Lazy;
-use std::{borrow::BorrowMut, sync::Mutex};
-
-static NOTIFY_ICON_DATA: Lazy<Mutex<NOTIFYICONDATAW>> =
-    Lazy::new(|| Mutex::new(unsafe { std::mem::zeroed() }));
-
-/// 显示气泡提示
-pub fn show_bubble(info: &str) {
-    if let Ok(nid) = NOTIFY_ICON_DATA.lock().borrow_mut() {
-        let nid: &mut NOTIFYICONDATAW = nid;
-        let htitle = HSTRING::from(APP_NAME);
-        let title = htitle.as_wide();
-        nid.szInfoTitle[0..title.len()].copy_from_slice(title);
-        let hinfo = HSTRING::from(info);
-        let info = hinfo.as_wide();
-        nid.szInfo[0..info.len()].copy_from_slice(info);
-        nid.uFlags = NIF_INFO;
-        nid.dwInfoFlags = NIIF_NONE;
-        unsafe { Shell_NotifyIconW(NIM_MODIFY, nid) };
-    }
-}
-
 pub fn open_in_browser(){
     unsafe{
         let cfg = config::load();
@@ -43,12 +20,23 @@ pub fn open_in_browser(){
 }
 
 pub fn open_main_window(){
-    std::thread::spawn(||{
-        use slint::ComponentHandle;
-        info!("启动窗口...");
-        crate::ui::Main::new().unwrap().run().unwrap();
-        info!("窗口关闭");
-    });
+    use slint::ComponentHandle;
+    info!("启动窗口...");
+    crate::ui::Main::new().unwrap().run().unwrap();
+    info!("窗口关闭");
+}
+
+pub fn start_main_window(){
+    // 获取当前可执行文件的路径
+    let current_exe = std::env::current_exe().unwrap();
+
+    // 构建命令行参数
+    let command_args = vec!["/c".to_string()];
+
+    // 启动新进程并传递命令行参数
+    Command::new(current_exe)
+        .args(&command_args)
+        .spawn().unwrap();
 }
 
 fn create_pcwstr(s: &str) -> Vec<u16> {
