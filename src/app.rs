@@ -1,6 +1,7 @@
-use std::{mem, path::Path, ffi::OsStr, os::windows::prelude::OsStrExt, process::Command};
+use std::{mem, path::Path, ffi::OsStr, os::windows::prelude::OsStrExt, process::Command, cell::RefCell, rc::Rc};
 use anyhow::{anyhow, Result};
 use log::info;
+use slint::Image;
 use windows::{Win32::{UI::{Shell::{NOTIFYICONDATAW, Shell_NotifyIconW, NIF_INFO, NIIF_NONE, NIM_MODIFY, ShellExecuteW, SHGetSpecialFolderPathW, CSIDL_STARTUP}, WindowsAndMessaging::{SW_SHOWNORMAL, GetDesktopWindow, GetWindowRect}}, Foundation::{HWND, RECT, MAX_PATH}}, core::{PCWSTR, HSTRING}, Storage::StorageFile, System::UserProfile::LockScreen};
 
 static TEMPLATE:&str = r"[InternetShortcut]
@@ -9,7 +10,9 @@ IconIndex=0
 IconFile=--
 ";
 
-use crate::config;
+use crate::{config, downloader::{set_wallpaper_default_async, self}, def::APP_NAME};
+
+static DEFAULT_IMAGE:&[u8] = include_bytes!("../res/icon_loading.png");
 
 pub fn open_in_browser(){
     unsafe{
@@ -19,10 +22,109 @@ pub fn open_in_browser(){
     }
 }
 
+pub fn open_file(path: &str){
+    unsafe{
+        ShellExecuteW(None, PCWSTR(create_pcwstr("open").as_ptr()), PCWSTR(create_pcwstr(&format!("{}\0", path)).as_ptr()), None, None, SW_SHOWNORMAL);
+    }
+}
+
 pub fn open_main_window(){
     use slint::ComponentHandle;
+    use slint::SharedPixelBuffer;
     info!("启动窗口...");
-    crate::ui::Main::new().unwrap().run().unwrap();
+    let app = crate::ui::Main::new().unwrap();
+
+    let cfg = Rc::new(RefCell::new(config::load()));
+
+    app.set_current_wallpaper(cfg.borrow().current_wallpaper_date.as_str().into());
+    app.set_wallpaper_file(cfg.borrow().current_wallpaper_file.as_str().into());
+    app.set_h8_data_url(cfg.borrow().download_url_h8.as_str().into());
+    app.set_f4a_data_url(cfg.borrow().download_url_fy4a.as_str().into());
+    app.set_config_file(cfg.borrow().config_path.as_str().into());
+    
+    let app_clone = app.as_weak();
+    app.on_open_image_file(move || {
+        open_file(&app_clone.unwrap().get_wallpaper_file());
+    });
+
+    app.on_sync_now(move || {
+        if !downloader::is_downloading(){
+            set_wallpaper_default_async();
+        }
+    });
+
+    let cfg_clone = cfg.clone();
+    app.on_change_satellite(move |select_index| {
+        let mut cfg = cfg_clone.borrow_mut();
+        if select_index == 0{
+            cfg.satellite_name = "fy4a".to_string();
+        }else{
+            cfg.satellite_name = "h8".to_string();
+        }
+        config::save(&mut cfg);
+        //立即更新
+        set_wallpaper_default_async();
+    });
+
+    let cfg_clone = cfg.clone();
+    app.on_change_interval(move |select_index| {
+        let mut cfg = cfg_clone.borrow_mut();
+        let intervals = [10, 20, 30, 40, 50, 60];
+        cfg.update_interval = intervals[select_index as usize];
+        config::save(&mut cfg);
+    });
+
+    let cfg_clone = cfg.clone();
+    app.on_change_wallpaper_size(move |select_index| {
+        let mut cfg = cfg_clone.borrow_mut();
+        cfg.display_type = select_index as u32 + 1;
+        config::save(&mut cfg);
+    });
+
+    app.on_change_startup(move |startup| {
+        let mut is_registered = false;
+        if startup{
+            let mut is_registered = is_app_registered_for_startup(APP_NAME).unwrap_or(false);
+            if !is_registered{
+                is_registered = register_app_for_startup(APP_NAME).is_ok();
+            }
+        }
+        else{
+            let _ = remove_app_for_startup(APP_NAME);
+            is_registered = false;
+        }
+        info!("是否开机启动:{is_registered}");
+    });
+    
+    app.on_open_home_page(move || {
+        open_file("https://www.ccfish.run/satellite_wallpaper/index.html");
+    });
+
+    app.on_open_gitee_page(move || {
+        open_file("https://gitee.com/planet0104-osc/satellite_wallpaper");
+    });
+
+    app.on_open_github_page(move || {
+        open_file("https://github.com/planet0104/satellite_wallpaper");
+    });
+
+    let default_image =
+    if cfg.borrow().current_wallpaper_file.len() > 0{
+        image::open(Path::new(&cfg.borrow().current_wallpaper_file)).unwrap().to_rgba8()
+    }else{
+        image::load_from_memory_with_format(DEFAULT_IMAGE, image::ImageFormat::Png).unwrap().to_rgba8()
+    };
+
+    app.on_render_image(move || {
+        //渲染到Image
+        Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
+            &default_image,
+            default_image.width(),
+            default_image.height(),
+        ))
+    });
+
+    app.run().unwrap();
     info!("窗口关闭");
 }
 
