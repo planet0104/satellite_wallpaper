@@ -1,8 +1,8 @@
 use std::{mem, path::Path, ffi::OsStr, os::windows::prelude::OsStrExt, process::Command, cell::RefCell, rc::Rc};
 use anyhow::{anyhow, Result};
 use log::info;
-use slint::Image;
-use windows::{Win32::{UI::{Shell::{NOTIFYICONDATAW, Shell_NotifyIconW, NIF_INFO, NIIF_NONE, NIM_MODIFY, ShellExecuteW, SHGetSpecialFolderPathW, CSIDL_STARTUP}, WindowsAndMessaging::{SW_SHOWNORMAL, GetDesktopWindow, GetWindowRect}}, Foundation::{HWND, RECT, MAX_PATH}}, core::{PCWSTR, HSTRING}, Storage::StorageFile, System::UserProfile::LockScreen};
+use slint::{Image, Timer, TimerMode, SharedPixelBuffer};
+use windows::{Win32::{UI::{Shell::{ShellExecuteW, SHGetSpecialFolderPathW, CSIDL_STARTUP}, WindowsAndMessaging::{SW_SHOWNORMAL, GetDesktopWindow, GetWindowRect}}, Foundation::{HWND, RECT, MAX_PATH}}, core::{PCWSTR, HSTRING}, Storage::StorageFile, System::UserProfile::LockScreen};
 
 static TEMPLATE:&str = r"[InternetShortcut]
 URL=--
@@ -14,14 +14,6 @@ use crate::{config, downloader::{set_wallpaper_default_async, self}, def::APP_NA
 
 static DEFAULT_IMAGE:&[u8] = include_bytes!("../res/icon_loading.png");
 
-pub fn open_in_browser(){
-    unsafe{
-        let cfg = config::load();
-        let url = format!("http://localhost:{}", cfg.server_port);
-        ShellExecuteW(None, PCWSTR(create_pcwstr("open").as_ptr()), PCWSTR(create_pcwstr(&format!("{}\0", url)).as_ptr()), None, None, SW_SHOWNORMAL);
-    }
-}
-
 pub fn open_file(path: &str){
     unsafe{
         ShellExecuteW(None, PCWSTR(create_pcwstr("open").as_ptr()), PCWSTR(create_pcwstr(&format!("{}\0", path)).as_ptr()), None, None, SW_SHOWNORMAL);
@@ -30,17 +22,20 @@ pub fn open_file(path: &str){
 
 pub fn open_main_window(){
     use slint::ComponentHandle;
-    use slint::SharedPixelBuffer;
     info!("启动窗口...");
     let app = crate::ui::Main::new().unwrap();
 
     let cfg = Rc::new(RefCell::new(config::load()));
 
-    app.set_current_wallpaper(cfg.borrow().current_wallpaper_date.as_str().into());
     app.set_wallpaper_file(cfg.borrow().current_wallpaper_file.as_str().into());
     app.set_h8_data_url(cfg.borrow().download_url_h8.as_str().into());
     app.set_f4a_data_url(cfg.borrow().download_url_fy4a.as_str().into());
     app.set_config_file(cfg.borrow().config_path.as_str().into());
+
+    app.set_is_startup(is_app_registered_for_startup(APP_NAME).unwrap_or(false));
+    app.set_current_interval_index(cfg.borrow().update_interval as i32/10 - 1);
+    app.set_current_size_index(cfg.borrow().display_type as i32-1);
+    app.set_current_satellite_index(if cfg.borrow().current_wallpaper_date.contains("fy4a"){ 0 }else{ 1 });
     
     let app_clone = app.as_weak();
     app.on_open_image_file(move || {
@@ -81,19 +76,22 @@ pub fn open_main_window(){
         config::save(&mut cfg);
     });
 
+    let app_clone = app.as_weak();
     app.on_change_startup(move |startup| {
-        let mut is_registered = false;
+        let is_registered = 
         if startup{
-            let mut is_registered = is_app_registered_for_startup(APP_NAME).unwrap_or(false);
+            let is_registered = is_app_registered_for_startup(APP_NAME).unwrap_or(false);
             if !is_registered{
-                is_registered = register_app_for_startup(APP_NAME).is_ok();
+                register_app_for_startup(APP_NAME).is_ok()
+            }else{
+                true
             }
         }
         else{
             let _ = remove_app_for_startup(APP_NAME);
-            is_registered = false;
-        }
-        info!("是否开机启动:{is_registered}");
+            false
+        };
+        app_clone.unwrap().set_is_startup(is_registered);
     });
     
     app.on_open_home_page(move || {
@@ -108,15 +106,33 @@ pub fn open_main_window(){
         open_file("https://github.com/planet0104/satellite_wallpaper");
     });
 
-    let default_image =
-    if cfg.borrow().current_wallpaper_file.len() > 0{
-        image::open(Path::new(&cfg.borrow().current_wallpaper_file)).unwrap().to_rgba8()
-    }else{
-        image::load_from_memory_with_format(DEFAULT_IMAGE, image::ImageFormat::Png).unwrap().to_rgba8()
-    };
+    //定时刷新图片
+    let app_clone = app.as_weak();
+    let cfg_clone = cfg.clone();
+    let timer = Timer::default();
+    timer.start(TimerMode::Repeated, std::time::Duration::from_millis(2000), move || {
+        let app = app_clone.unwrap();
+        let mut cfg = cfg_clone.borrow_mut();
+        *cfg = config::load();
+        let current_wallpaper_date = app.get_current_wallpaper();
+        if current_wallpaper_date != cfg.current_wallpaper_date && !downloader::is_downloading(){
+            info!("刷新了图片...");
+            app.set_current_wallpaper(cfg.current_wallpaper_date.as_str().into());
+            // app.set_wallpaper_file(cfg.current_wallpaper_file.as_str().into());
+            app.set_image_frame(app.get_image_frame()+1);
+        }
+    });
 
-    app.on_render_image(move || {
+    let cfg_clone = cfg.clone();
+    app.on_render_image(move |_frame| {
+        let cfg = cfg_clone.borrow();
         //渲染到Image
+        let default_image =
+        if cfg.current_wallpaper_file.len() > 0{
+            image::open(Path::new(&cfg.current_wallpaper_file)).unwrap().to_rgba8()
+        }else{
+            image::load_from_memory_with_format(DEFAULT_IMAGE, image::ImageFormat::Png).unwrap().to_rgba8()
+        };
         Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
             &default_image,
             default_image.width(),

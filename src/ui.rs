@@ -7,13 +7,19 @@ slint::slint!{
         height: 480px;
         icon: @image-url("res/favicon_64.ico");
 
-        pure callback render-image() -> image;
+        pure callback render-image(int) -> image;
+        in-out property <int> image-frame;
 
         in property <string> current_wallpaper: "";
         in-out property <string> wallpaper_file: "";
         in property <string> f4a_data_url: "";
         in property <string> h8_data_url: "";
         in property <string> config_file: "";
+
+        in-out property <int> current-satellite-index: 0;
+        in-out property <int> current-interval-index: 0;
+        in-out property <int> current-size-index: 0;
+        in-out property <bool> is-startup: false;
 
         callback change_satellite(int);
         callback change_interval(int);
@@ -39,7 +45,7 @@ slint::slint!{
                             HorizontalBox { 
                                 alignment: center;
                                 Image {
-                                    source: render-image();
+                                    source: render-image(image-frame);
                                 }
                             }
                         }
@@ -57,45 +63,49 @@ slint::slint!{
                         VerticalBox {
                             ComboBox {
                                 model: ["卫星：风云4号", "卫星：向日葵8号"];
-                                current-value: "卫星：风云4号";
+                                current-value: "卫星："+(current-satellite-index==0?"风云4号":"向日葵8号");
+                                current-index: current-satellite-index;
                                 selected => {
                                     change-satellite(self.current-index)
                                 }
                             }
                             ComboBox {
                                 model: ["更新频率：10分钟", "更新频率：20分钟", "更新频率：30分钟", "更新频率：40分钟", "更新频率：50分钟", "更新频率：60分钟"];
-                                current-value: "更新频率：10分钟";
+                                current-value: "更新频率："+((current-interval-index+1) * 10)+"分钟";
+                                current-index: current-interval-index;
                                 selected => {
                                     change-interval(self.current-index)
                                 }
                             }
                             ComboBox {
-                                model: ["壁纸样式：整张", "壁纸样式：半张张"];
-                                current-value: "壁纸样式：整张";
+                                model: ["壁纸样式：整张", "壁纸样式：半张"];
+                                current-value: "壁纸样式："+(current-size-index==0?"整张":"半张");
+                                current-index: current-size-index;
                                 selected => {
                                     change-wallpaper-size(self.current-index)
                                 }
                             }
                             ComboBox {
                                 model: ["开机启动：否", "开机启动：是"];
-                                current-value: "开机启动：否";
+                                current-value: "开机启动："+(is-startup?"是":"否");
+                                current-index: is-startup? 1: 0;
                                 selected => {
                                     change-startup(self.current-index==1)
                                 }
                             }
-                            Text {
+                            TextInput {
                                 text: "当前壁纸:"+current_wallpaper;
                             }
-                            Text {
+                            TextInput {
                                 text: "本地文件:"+wallpaper_file;
                             }
-                            Text {
+                            TextInput {
                                 text: "风云4号A星数据地址:"+f4a_data_url;
                             }
-                            Text {
+                            TextInput {
                                 text: "向日葵8号数据地址:"+h8_data_url;
                             }
-                            Text {
+                            TextInput {
                                 text: "配置文件:"+config_file;
                             }
                             Button {
