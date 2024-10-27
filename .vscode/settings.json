@@ -1,4 +1,6 @@
 {
+    "rust-analyzer.cargo.target": "aarch64-linux-android",
+    "rust-analyzer.showUnlinkedFileNotification": false,
     "cSpell.words": [
         "CSIDL",
         "DEFAULTCOLOR",

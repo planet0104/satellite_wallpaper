@@ -1,9 +1,10 @@
 use anyhow::Result;
+use async_std::fs::create_dir;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
-use std::{fs::{File, create_dir}, io::{Read, Write}, path::Path};
+use std::path::Path;
 
-use crate::def::{APP_NAME_E, DEFAULT_DOWNLOAD_URL_FY4A, DEFAULT_DOWNLOAD_URL_H8, DEFAULT_SERVER_PORT};
+use crate::{app::get_config_dir, def::{APP_NAME_E, DEFAULT_DOWNLOAD_URL_FY4B, DEFAULT_DOWNLOAD_URL_H8, DEFAULT_SERVER_PORT}};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -19,7 +20,7 @@ pub struct Config {
     /// h8卫星图片下载地址
     pub download_url_h8: String,
     /// 风云4号卫星图片下载地址
-    pub download_url_fy4a: String,
+    pub download_url_fy4b: String,
 
     /// 下载的卫星名字
     pub satellite_name: String,
@@ -40,30 +41,36 @@ pub struct Config {
     pub config_path: String,
 }
 
-pub fn load() -> Config {
-    match read_config() {
-        Ok(cfg) => cfg,
-        Err(err) => {
-            error!("配置文件读取失败: {:?}", err);
-            Config {
-                update_interval: 10,
-                display_type: 1,
-                server_port: DEFAULT_SERVER_PORT,
-                download_url_h8: DEFAULT_DOWNLOAD_URL_H8.to_string(),
-                download_url_fy4a: DEFAULT_DOWNLOAD_URL_FY4A.to_string(),
-                old_wallpaper: String::new(),
-                current_wallpaper_date: String::new(),
-                current_wallpaper_file: String::new(),
-                config_path: String::new(),
-                satellite_name: String::from("fy4a"),
-                current_wallpaper_thumbnail: None,
-            }
+impl Default for Config{
+    fn default() -> Self {
+        Self {
+            update_interval: 10,
+            display_type: 1,
+            server_port: DEFAULT_SERVER_PORT,
+            download_url_h8: DEFAULT_DOWNLOAD_URL_H8.to_string(),
+            download_url_fy4b: DEFAULT_DOWNLOAD_URL_FY4B.to_string(),
+            old_wallpaper: String::new(),
+            current_wallpaper_date: String::new(),
+            current_wallpaper_file: String::new(),
+            config_path: String::new(),
+            satellite_name: String::from("fy4b"),
+            current_wallpaper_thumbnail: None,
         }
     }
 }
 
-pub fn save(cfg: &mut Config) {
-    if let Err(err) = write_config(cfg) {
+pub async fn load() -> Config {
+    match read_config().await {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            error!("配置文件读取失败: {:?}", err);
+            Config::default()   
+        }
+    }
+}
+
+pub async fn save(cfg: Config) {
+    if let Err(err) = write_config(cfg).await {
         error!("配置保存失败: {:?}", err)
     }else{
         // info!("配置保存成功: {:?}", cfg);
@@ -71,38 +78,35 @@ pub fn save(cfg: &mut Config) {
     }
 }
 
-fn get_config_file_path() -> String {
+async fn get_config_file_path() -> String {
     let cfg_file_name = &format!("{}{}.toml", APP_NAME_E, env!("CARGO_PKG_VERSION"));
     let mut cfg_path_name = cfg_file_name.to_string();
-    if let Some(cfg_dir) = dirs::config_dir(){
-        if let Some(cfg_dir) = cfg_dir.to_str(){
-            let my_cfg_dir = format!("{}\\{}", cfg_dir, APP_NAME_E);
-            if Path::exists(Path::new(&my_cfg_dir)){
-                cfg_path_name = format!("{}\\{}", my_cfg_dir, cfg_file_name);
-            }else{
-                if let Ok(()) = create_dir(&my_cfg_dir){
-                    cfg_path_name = format!("{}\\{}", my_cfg_dir, cfg_file_name);
-                }
-            }
+    let cfg_dir = get_config_dir();
+    let my_cfg_dir = format!("{}/{}", cfg_dir, APP_NAME_E);
+    if Path::exists(Path::new(&my_cfg_dir)){
+        cfg_path_name = format!("{}/{}", my_cfg_dir, cfg_file_name);
+    }else{
+        if let Ok(()) = create_dir(&my_cfg_dir).await{
+            cfg_path_name = format!("{}/{}", my_cfg_dir, cfg_file_name);
         }
     }
     // info!("config {:?}", cfg_path_name);
     cfg_path_name
 }
 
-fn read_config() -> Result<Config> {
-    let cfg_path = get_config_file_path();
-    let mut config_file = File::open(cfg_path)?;
+async fn read_config() -> Result<Config> {
+    let cfg_path = get_config_file_path().await;
+    let mut config_file = async_std::fs::File::open(cfg_path).await?;
     let mut config_str = String::new();
-    config_file.read_to_string(&mut config_str)?;
+    async_std::io::ReadExt::read_to_string(&mut config_file, &mut config_str).await?;
     Ok(toml::from_str(&config_str)?)
 }
 
-fn write_config(cfg: &mut Config) -> Result<()> {
-    let cfg_path = get_config_file_path();
+async fn write_config(mut cfg: Config) -> Result<()> {
+    let cfg_path = get_config_file_path().await;
     cfg.config_path = cfg_path.clone();
-    let mut config_file = File::create(cfg_path)?;
-    let cfg_str = toml::to_string(cfg)?;
-    config_file.write_all(cfg_str.as_bytes())?;
+    let cfg_str = toml::to_string(&cfg)?;
+    let mut config_file = async_std::fs::File::create(cfg_path).await?;
+    async_std::io::WriteExt::write_all(&mut config_file, cfg_str.as_bytes()).await?;
     Ok(())
 }

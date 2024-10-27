@@ -1,39 +1,67 @@
 [package]
 name = "satellite_wallpaper"
-version = "1.0.2"
+version = "1.1.0"
 authors = ["Jia Ye <planet0104@gmail.com>"]
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
-image = "0.24.7"
+image = "0.25.4"
 anyhow = "1"
-once_cell = "1.18.0"
-toml = "0.8.0"
+once_cell = "1.20.2"
+toml = "0.8.19"
 serde = { version = "1.0", features = ["derive"] }
-time = { version = "0.3.28", features = ["macros"] }
-wallpaper = "3.2.0"
+time = { version = "0.3.36", features = ["macros"] }
 log = "0.4"
-env_logger = "0.10.0"
+data-encoding = "2.6.0"
+minreq = { version="2.12", features=["https"]}
+fast_image_resize = "5.0.0"
+chrono = "0.4.38"
+async-std = "1.13.0"
+
+[target.'cfg(target_os = "android")'.dependencies]
+slint = {version = "1.8.0", features = ["backend-android-activity-06"]}
+android_logger = "0.14.1"
+jni = "0.21.1"
+ndk-sys = "0.6.0+11769913"
+
+[target.'cfg(windows)'.dependencies]
+slint = {version = "1.8.0"}
+env_logger = "0.11.5"
 dirs = "5.0.1"
-data-encoding = "2.4.0"
-minreq = { version="2.10.0", features=["https"]}
-tray-icon = "0.9.0"
-tao = "0.22.2"
-slint = "1.2.1"
+tray-icon = "0.19.1"
+tao = "0.30.3"
+wallpaper = "3.2.0"
+windows = { version = "0.58", features = [
+        "Win32_UI_Shell",
+        "Win32_Foundation",
+        "Win32_UI_WindowsAndMessaging",
+        "Storage",
+        "System_UserProfile",
+        "Foundation"] }
 
-[dependencies.windows]
-version = "0.51"
-features = [
-    "Win32_UI_Shell",
-    "Win32_Foundation",
-    "Win32_UI_WindowsAndMessaging",
-    "Storage",
-    "System_UserProfile",
-    "Foundation"
-]
-
-[build-dependencies]
+[target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
+
+[package.metadata.android]
+package = "com.planet.satellitewallpaper"
+
+apk_name = "SatelliteWallpaper"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+[[package.metadata.android.uses_permission]]
+name = "android.permission.SET_WALLPAPER"
+
+[package.metadata.android.signing.release]
+path = "./test.jks"
+keystore_password = "123456"
+
+[package.metadata.android.signing.debug]
+path = "./test.jks"
+keystore_password = "123456"
 
 [profile.release]
 lto = true

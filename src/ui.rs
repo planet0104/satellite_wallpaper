@@ -3,12 +3,9 @@ slint::slint!{
 
     export component Main inherits Window {
         title: "卫星壁纸";
-        width: 640px;
-        height: 480px;
         icon: @image-url("res/favicon_64.ico");
 
-        pure callback render-image(int) -> image;
-        in-out property <int> image-frame;
+        in-out property <image> source_image;
 
         in property <string> current_wallpaper: "";
         in-out property <string> wallpaper_file: "";
@@ -45,13 +42,15 @@ slint::slint!{
                             HorizontalBox { 
                                 alignment: center;
                                 Image {
-                                    source: render-image(image-frame);
+                                    source: source_image;
                                 }
                             }
-                        }
-                        TouchArea {
-                            clicked => { 
-                                open-image-file()
+                            Button {
+                                width: 100%;
+                                text: "打开图片";
+                                clicked => {
+                                    open-image-file()
+                                }
                             }
                         }
                     }
@@ -93,22 +92,23 @@ slint::slint!{
                                     change-startup(self.current-index==1)
                                 }
                             }
-                            TextInput {
+                            Text {
                                 text: "当前壁纸:"+current_wallpaper;
                             }
-                            TextInput {
+                            Text {
                                 text: "本地文件:"+wallpaper_file;
                             }
-                            TextInput {
+                            Text {
                                 text: "风云4号A星数据地址:"+f4a_data_url;
                             }
-                            TextInput {
+                            Text {
                                 text: "向日葵8号数据地址:"+h8_data_url;
                             }
-                            TextInput {
+                            Text {
                                 text: "配置文件:"+config_file;
                             }
                             Button {
+                                width: 100%;
                                 text: "立即更新壁纸🔄";
                                 clicked => {
                                     sync-now()
@@ -123,18 +123,21 @@ slint::slint!{
                         background: #202020;
                         VerticalBox {
                             Button {
+                                width: 100%;
                                 text: "项目主页🔗\n \nhttps://www.ccfish.run/satellite_wallpaper/index.html";
                                 clicked => { 
                                     open-home-page()
                                 }
                             }
                             Button {
+                                width: 100%;
                                 text: "Gitee代码库🔗\n \nhttps://gitee.com/planet0104-osc/satellite_wallpaper";
                                 clicked => {
                                     open-gitee-page()
                                 }
                             }
                             Button {
+                                width: 100%;
                                 text: "Github代码库🔗\n \nhttps://github.com/planet0104/satellite_wallpaper";
                                 clicked => {
                                     open-github-page()

@@ -8,10 +8,10 @@
 
 下载地址: <a href="https://www.ccfish.run/satellite_wallpaper">实时卫星桌面壁纸</a>
 
-<img src="https://www.ccfish.run/satellite_wallpaper/fy4a.jpg" />
+<img src="https://www.ccfish.run/satellite_wallpaper/fy4b.jpg" />
 
 <img src="https://www.ccfish.run/satellite_wallpaper/h8.jpg" />
 
-<img src="https://www.ccfish.run/satellite_wallpaper/fy4a.png" />
+<img src="https://www.ccfish.run/satellite_wallpaper/fy4b.png" />
 
 <img src="https://www.ccfish.run/satellite_wallpaper/h8.png" />
