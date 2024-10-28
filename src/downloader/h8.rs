@@ -1,15 +1,13 @@
 use std::time::Instant;
-
 use anyhow::{anyhow, Result};
-use async_std::task::{spawn, spawn_blocking};
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
 use log::{error, info};
 use time::OffsetDateTime;
 
-use crate::{config::{self, Config}, downloader::format_time_str};
+use crate::{config::Config, downloader::format_time_str};
 
 /// 下载4x4、2x2的图，最终大小: 1100x1100 、2200x2200
-pub async fn download<C>(
+pub fn download<C>(
     url: &str,
     d: u32,
     year: i32,
@@ -36,15 +34,15 @@ where
     let total = d*d;
     let t = Instant::now();
     info!("开始下载图片 共{total}张...");
-    let (tx, rx) = async_std::channel::unbounded();
+    let (tx, rx) = std::sync::mpsc::channel();
 
     for y in 0..d{
         for x in 0..d{
             let url1 = url.to_string();
             let tx1 = tx.clone();
-            spawn(async move{
-                let ret = download_image(&format_url(&url1, year, month, day, hour, ten_minute / 10, d, x, y)).await;
-                let _ = tx1.send((count, ret)).await;
+            std::thread::spawn(move ||{
+                let ret = download_image(&format_url(&url1, year, month, day, hour, ten_minute / 10, d, x, y));
+                let _ = tx1.send((count, ret));
             });
             count += 1;
         }
@@ -54,7 +52,7 @@ where
 
     let mut count = 0;
     for _ in 0..total{
-        let r = rx.recv().await;
+        let r = rx.recv();
         if r.is_err(){
             error!("图片下载超时:{:?}", r.err());
             break;
@@ -90,12 +88,10 @@ where
     Ok(big_img)
 }
 
-pub async fn download_image(url: &str) -> Result<RgbaImage> {
+pub fn download_image(url: &str) -> Result<RgbaImage> {
     info!("download_image {}", url);
     let url = url.to_string();
-    spawn_blocking(move ||{
-        download_image_sync(&url)
-    }).await
+    download_image_sync(&url)
 }
 
 fn download_image_sync(url: &str) -> Result<RgbaImage> {
@@ -122,7 +118,7 @@ fn format_url(
 }
 
 /// 下载最新图片, 20分钟之前
-pub async fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
+pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
     let mut timestamp = OffsetDateTime::now_utc().unix_timestamp();
     //减去20分钟
     timestamp -= 20 * 60 * 1000;
@@ -134,6 +130,5 @@ pub async fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32,
         return Ok(None);
     }
     cfg.current_wallpaper_date = timestr;
-    config::save(cfg.clone()).await;
-    Ok(Some(download(&cfg.download_url_h8, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute(), callback).await?))
+    Ok(Some(download(&cfg.download_url_h8, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute(), callback)?))
 }

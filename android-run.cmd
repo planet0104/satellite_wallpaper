@@ -7,4 +7,5 @@
 
 @REM 请设置系统环境变量，否则无法正常编译 例如：ANDROID_NDK = "D:\android-ndk-r21e"
 
-cargo apk run --target aarch64-linux-android --lib
+@REM cargo apk run --target aarch64-linux-android --lib
+cargo apk run --release --target aarch64-linux-android --lib

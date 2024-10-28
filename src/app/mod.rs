@@ -1,14 +1,18 @@
 
 use std::time::Instant;
 use std::path::Path;
+use async_std::task::spawn_blocking;
 use def::APP_NAME;
+use log::warn;
 use log::{error, info};
+use slint::Rgb8Pixel;
 use slint::{Image, SharedPixelBuffer, Timer, TimerMode, Weak};
-use async_std::sync::{Arc, Mutex, RwLock};
-use crate::config::{self, Config};
+use async_std::sync::{Arc, Mutex};
+use crate::config::Config;
 use crate::downloader;
 use crate::def;
-use crate::server::get_download_status;
+use crate::downloader::is_downlading;
+use crate::server;
 
 #[cfg(windows)]
 mod windows;
@@ -22,12 +26,32 @@ pub use android::*;
 
 static DEFAULT_IMAGE:&[u8] = include_bytes!("../../res/icon_loading.png");
 
-async fn update_config_ui(app: Weak<crate::ui::Main>){
+pub async fn open_wall_paper_image(url: &str) -> anyhow::Result<SharedPixelBuffer<Rgb8Pixel>>{
+    let url = url.to_string();
+    spawn_blocking(move ||{
+        let t = Instant::now();
+        info!("开始读取图片文件....................");
+        let file = image::open(Path::new(&url))?;
+        info!("读取图片文件....................{}ms", t.elapsed().as_millis());
+        let t = Instant::now();
+        let img = file.to_rgb8();
+        info!("读取图片文件....................{}x{} {}ms", img.width(), img.height(), t.elapsed().as_millis());
+        let t = Instant::now();
+        let buf = SharedPixelBuffer::clone_from_slice(
+            &img,
+            img.width(),
+            img.height(),
+        );
+        info!("读取图片文件.................... buf={}x{} {}ms", buf.width(), buf.height(), t.elapsed().as_millis());
+        Ok(buf)
+    }).await
+}
+
+fn update_config_ui(app: Weak<crate::ui::Main>, cfg:&Config){
     let app = match app.upgrade() {
         Some(app) => app,
         None => return
     };
-    let cfg = config::load().await;
     app.set_wallpaper_file(cfg.current_wallpaper_file.as_str().into());
     app.set_h8_data_url(cfg.download_url_h8.as_str().into());
     app.set_f4a_data_url(cfg.download_url_fy4b.as_str().into());
@@ -41,6 +65,13 @@ pub fn open_main_window(){
     use slint::ComponentHandle;
     info!("启动窗口...");
     let app = crate::ui::Main::new().unwrap();
+
+    #[cfg(target_os = "android")]
+    {
+        let _ = slint::spawn_local(server::start_update_loop(std::sync::Arc::new(std::sync::Mutex::new(false))));   
+    }
+
+    let config = Arc::new(Mutex::new(Config::default()));
     
     app.set_is_startup(is_app_registered_for_startup(APP_NAME).unwrap_or(false));
     let app_clone = app.as_weak();
@@ -50,44 +81,55 @@ pub fn open_main_window(){
 
     app.on_sync_now(move || {
         let _ = slint::spawn_local(async move {
-            if !get_download_status().await.downloading{
-                downloader::set_wallpaper_default().await;
+            if !is_downlading(){
+                let mut cfg = Config::load_or_default().await;
+                downloader::set_wallpaper_default(&mut cfg).await;
+            }else{
+                info!("按钮点击 正在下载中...");
             }
         });
     });
 
+    let config_clone = config.clone();
     app.on_change_satellite(move |select_index| {
+        let config_clone = config_clone.clone();
         let _ = slint::spawn_local(async move {
-            let mut cfg = config::load().await;
+            let mut cfg = config_clone.lock().await;
             if select_index == 0{
                 cfg.satellite_name = "fy4b".to_string();
             }else{
                 cfg.satellite_name = "h8".to_string();
             }
-            config::save(cfg).await;
+            let _ = cfg.save_to_file().await;
+
+            let mut cfg_clone = cfg.clone();
             
             let _ = slint::spawn_local(async move {
                 //立即更新
-                downloader::set_wallpaper_default().await;
+                downloader::set_wallpaper_default(&mut cfg_clone).await;
                 info!("on_change_satellite 壁纸更新完成...");
             });
         });
     });
 
+    let config_clone = config.clone();
     app.on_change_interval(move |select_index| {
+        let config_clone = config_clone.clone();
         let _ = slint::spawn_local(async move {
-            let mut cfg = config::load().await;
+            let mut cfg = config_clone.lock().await;
             let intervals = [10, 20, 30, 40, 50, 60];
             cfg.update_interval = intervals[select_index as usize];
-            config::save(cfg).await;
+            let _ = cfg.save_to_file().await;
         });
     });
 
+    let config_clone = config.clone();
     app.on_change_wallpaper_size(move |select_index| {
+        let config_clone = config_clone.clone();
         let _ = slint::spawn_local(async move {
-            let mut cfg = config::load().await;
+            let mut cfg = config_clone.lock().await;
             cfg.display_type = select_index as u32 + 1;
-            config::save(cfg).await;
+            let _ = cfg.save_to_file().await;
         });
     });
 
@@ -127,7 +169,7 @@ pub fn open_main_window(){
     timer.start(TimerMode::Repeated, std::time::Duration::from_millis(3000), move || {
         let app_clone = app_clone.clone();
         let _ = slint::spawn_local(async move {
-            // info!("timer 开始....");
+            info!("timer 开始....");
             let app = match app_clone.upgrade(){
                 Some(v) => v,
                 None => {
@@ -135,43 +177,40 @@ pub fn open_main_window(){
                     return
                 }
             };
-            update_config_ui(app_clone.clone()).await;
-            let cfg = config::load().await;
-            let current_wallpaper_date = app.get_current_wallpaper();
-            info!("开始获取download_status...");
-            let status = get_download_status().await;
-            info!("获取到download_status... {:?}", status);
-            //显示更新状态文字
-            info!("更新下载状态文字:{}", status.status());
-            app.set_download_status(status.status().into());
             
-            if current_wallpaper_date != cfg.current_wallpaper_date && !status.downloading{
-                info!("刷新图片...");
-                app.set_current_wallpaper(cfg.current_wallpaper_date.as_str().into());
-
-                let url = cfg.current_wallpaper_file.to_string();
-                let app = app_clone.clone();
-                std::thread::spawn(move ||{
-                    info!("显示当前壁纸:{url}");
-                    match image::open(Path::new(&url)){
-                        Ok(file) => {
-                            let img = file.to_rgba8();
-                            let _ = app.upgrade_in_event_loop(move |app|{
-                                let t = Instant::now();
-                                let new_image = Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
-                                    &img,
-                                    img.width(),
-                                    img.height(),
-                                ));
-                                app.set_source_image(new_image);
-                                info!("渲染图片耗时:{}ms", t.elapsed().as_millis());
-                            });
-                        }
-                        Err(err) => {
-                            info!("显示当前壁纸 读取失败:{:?}", err);
-                        }
+            let cfg = Config::load_or_default().await;
+            update_config_ui(app_clone.clone(), &cfg);
+            let current_wallpaper_date = app.get_current_wallpaper();
+            let t = Instant::now();
+            let is_downloading = is_downlading();
+            warn!("锁定 is_downloading 耗时:{}ms", t.elapsed().as_millis());
+            if is_downloading{
+                //显示更新状态文字
+                app.set_download_status("正在下载壁纸...".into());
+            }else{
+                warn!("Timer 未下载 开始设置状态...");
+                app.set_download_status(format!("上次更新: {}", cfg.get_last_update_time_str()).into());
+                warn!("Timer 未下载 检查是否要更新图片...");
+                if current_wallpaper_date != cfg.current_wallpaper_date{
+                    warn!("Timer 未下载 需要更新图片...");
+                    app.set_current_wallpaper(cfg.current_wallpaper_date.as_str().into());
+                    warn!("Timer 未下载 打开图片文件...");
+                    let url = cfg.current_wallpaper_file.to_string();
+                    let t = Instant::now();
+                    warn!("Timer 未下载 打开图片文件 01...");
+                    let buf = open_wall_paper_image(&url).await;
+                    warn!("Timer 未下载 打开图片文件 02...");
+                    if buf.is_err(){
+                        error!("图片读取失败:{:?}", buf.err());
+                        return;
                     }
-                });
+                    let buf = buf.unwrap();
+                    info!("加载图片耗时:{}ms", t.elapsed().as_millis());
+                    let t = Instant::now();
+                    let new_image = Image::from_rgb8(buf);
+                    app.set_source_image(new_image);
+                    info!("渲染图片耗时:{}ms", t.elapsed().as_millis());
+                }
             }
             // info!("timer 结束...");
         });
@@ -185,7 +224,11 @@ pub fn open_main_window(){
     ));
     app.set_source_image(image);
     
-    let _ = slint::spawn_local(update_config_ui(app.as_weak()));
+    let config_clone = config.clone();
+    let app_clone = app.as_weak();
+    let _ = slint::spawn_local(async move{
+        update_config_ui(app_clone, &*config_clone.lock().await);
+    });
 
     app.run().unwrap();
     info!("窗口关闭");

@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, mem, os::windows::prelude::OsStrExt, path::{Path, PathBuf}, process::Command, time::Duration};
+use std::{ffi::OsStr, mem, os::windows::prelude::OsStrExt, path::{Path, PathBuf}, process::Command, sync::{Arc, Mutex}, time::Duration};
 use anyhow::{anyhow, Result};
 use async_std::task::block_on;
 use log::{info, LevelFilter};
@@ -107,8 +107,11 @@ pub fn run() -> Result<()> {
         }
     }
 
+    let is_exit = Arc::new(Mutex::new(false));
+    let is_exit_clone= is_exit.clone();
+
     std::thread::spawn(move ||{
-        block_on(crate::server::start_update_loop());
+        block_on(crate::server::start_update_loop(is_exit_clone));
     });
 
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/res/iconfinder_Globe_31212.png");
@@ -132,8 +135,13 @@ pub fn run() -> Result<()> {
     let tray_channel = TrayIconEvent::receiver();
     
     let event_loop_proxy = event_loop.create_proxy();
+
+    let is_exit_clone= is_exit.clone();
     std::thread::spawn(move || {
         loop {
+            if *is_exit_clone.lock().unwrap(){
+                break;
+            }
             event_loop_proxy.send_event(()).ok();
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -152,6 +160,7 @@ pub fn run() -> Result<()> {
             }else{
                 //退出
                 *control_flow = ControlFlow::Exit;
+                *is_exit.lock().unwrap() = true;
             }
         }
         

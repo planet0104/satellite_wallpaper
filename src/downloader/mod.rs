@@ -1,25 +1,39 @@
 use std::time::Instant;
 use anyhow::Result;
 use async_std::task::spawn_blocking;
-use chrono::Timelike;
+use chrono::{Local, Timelike};
 use image::{buffer::ConvertBuffer, imageops::resize, GenericImage, RgbImage};
 use log::{info, error};
 pub mod h8;
 pub mod fy4x;
 
-use crate::{app::{get_current_wallpaper, get_screen_size, get_wallpaper_file_path}, config, server::{set_download_status, DownloadStatus}};
+use crate::{app::{get_current_wallpaper, get_screen_size, get_wallpaper_file_path}, config::Config};
+
+static DOWNLOADING: std::sync::RwLock<bool> = std::sync::RwLock::new(false);
+
+pub fn is_downlading() -> bool{
+    match DOWNLOADING.read() {
+        Ok(v) =>*v,
+        Err(_) => false,
+    }
+}
+
+pub fn set_downlading(d: bool){
+    match DOWNLOADING.write() {
+        Ok(mut v) => *v = d,
+        Err(_) => ()
+    }
+}
 
 pub fn format_time_str(download_name:&str, d: u32, year:i32, month:u8, day:u8, hour: u8, minute:u8) -> String{
     format!("{}-D{}-UTC-{}年-{}月-{}日-{}时-{:02}分", download_name, d, year, month, day, hour, (minute/15)*15)
 }
 
-async fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: bool, callback: C) -> Result<()>{
-    let mut cfg = config::load().await;
+fn set_wallpaper<C:Fn(u32, u32) + 'static>(cfg:&mut Config, width: u32, height: u32, half: bool, callback: C) -> Result<()>{
     //保存原有壁纸路径
     if cfg.old_wallpaper.len() == 0{
         if let Ok(old) = get_current_wallpaper(){
             cfg.old_wallpaper = old;
-            config::save(cfg.clone()).await;
         }
     }
     info!("set_wallpaper>>准备下载 {width}x{height}...");
@@ -28,8 +42,8 @@ async fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: 
     let d = if height > 1080||half { 4 }else{ 2};
     let image = 
         match cfg.satellite_name.as_str(){
-            "h8" => h8::download_lastest(&mut cfg, d, callback).await?,
-            _ => fy4x::download_lastest(&mut cfg, d, callback).await?,
+            "h8" => h8::download_lastest(cfg, d, callback)?,
+            _ => fy4x::download_lastest(cfg, d, callback)?,
         };
     if image.is_none(){
         error!("set_wallpaper>>图片下载失败 {width}x{height} image.is_none()");
@@ -62,7 +76,7 @@ async fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: 
 
         info!("set_wallpaper>>开始缩放 scale={scale} 目标大小:{final_width}x{final_height}...");
         let t = Instant::now();
-        let mut image = fast_resize(&image, final_width as u32, final_height as u32).await;
+        let mut image = fast_resize(&image, final_width as u32, final_height as u32);
         info!("set_wallpaper>>图片缩放成功 image:{}x{} paper:{}x{} half:{half} 耗时:{}ms", image.width(), image.height(), paper.width(), paper.height(), t.elapsed().as_millis());
 
         // 复制到桌面背景中
@@ -118,7 +132,7 @@ async fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: 
 
         info!("set_wallpaper>>开始缩放 目标大小:{final_width}x{final_height}...");
         let t = Instant::now();
-        let image = fast_resize(&image, final_width as u32, final_height as u32).await;
+        let image = fast_resize(&image, final_width as u32, final_height as u32);
         info!("set_wallpaper>>图片缩放成功 image:{}x{} paper:{}x{} half:{half} 耗时:{}ms", image.width(), image.height(), paper.width(), paper.height(), t.elapsed().as_millis());
 
         if !left{
@@ -148,9 +162,6 @@ async fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: 
     info!("set_wallpaper>>wallpaper_file_path {wallpaper_file_path}");
     paper.save(&wallpaper_file_path)?;
     cfg.current_wallpaper_file = wallpaper_file_path.clone();
-    info!("set_wallpaper>>保存配置文件...");
-    config::save(cfg.clone()).await;
-
     // 设置锁屏
     let loc_res = super::app::set_lock_screen_image(&wallpaper_file_path);
     info!("锁屏设置结果: {:?}", loc_res);
@@ -160,33 +171,41 @@ async fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: 
     loc_res
 }
 
-pub async fn set_wallpaper_default(){
-
+pub async fn set_wallpaper_default(cfg: &mut Config){
+    if is_downlading(){
+        info!("壁纸正在下载中, 请稍后..");
+        return;
+    }
     // 获取屏幕宽高
     let (screen_width, screen_height) = get_screen_size();
 
-    set_download_status(DownloadStatus::new(true, &format!("开始下载壁纸 屏幕大小:{screen_width}x{screen_height}"))).await;
+    set_downlading(true);
 
-    let mut cfg = config::load().await;
-    
+    let display_type = cfg.display_type;
+    let cfg_clone = cfg.clone();
+
+    let ret = spawn_blocking(move ||{
+        let mut cfg = cfg_clone;
+        let ret = set_wallpaper(&mut cfg, screen_width as u32, screen_height as u32, display_type==2, |i,t|{
+                info!("正在下载: {}/{}", i, t);
+        });
+        (cfg, ret)
+    }).await;
+    let (mut cfg, ret) = ret;
     //下载最新壁纸
-    if let Err(err) = set_wallpaper(screen_width as u32, screen_height as u32, cfg.display_type==2, |i,t|{
-            info!("正在下载: {}/{}", i, t);
-    }).await{
+    if let Err(err) = ret{
         error!("壁纸下载失败: {:?}", err);
-        set_download_status(DownloadStatus::new(true, &format!("壁纸下载失败 {:?}", err))).await;
     }else{
-        cfg.last_save_time = Some(current_time_str());
-        config::save(cfg).await;
-        set_download_status(DownloadStatus::new(true, "壁纸下载成功")).await;
+        cfg.last_download_timestamp = Some(Local::now().timestamp_millis());
+        let _ = cfg.save_to_file().await;
     }
+    set_downlading(false);
+    info!("下载结束....");
 }
 
-async fn fast_resize(src:&RgbImage, dst_width: u32, dst_height: u32) -> RgbImage{
+fn fast_resize(src:&RgbImage, dst_width: u32, dst_height: u32) -> RgbImage{
     let src = src.clone();
-    spawn_blocking(move ||{
-        fast_resize_block(&src, dst_width, dst_height)
-    }).await
+    fast_resize_block(&src, dst_width, dst_height)
 }
 
 fn fast_resize_block(src:&RgbImage, dst_width: u32, dst_height: u32) -> RgbImage{

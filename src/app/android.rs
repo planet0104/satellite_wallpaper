@@ -52,9 +52,14 @@ pub fn set_lock_screen_image(image: &str) -> Result<()>{
 
 // 设置壁纸
 pub fn set_wallpaper_from_path(image: &str) -> Result<()>{
-    info!("Android调用 set_wallpaper_from_path:{image}");
-    android_set_wallpaper(&get_app()?.get(), image)?;
-    info!("Android调用 set_wallpaper_from_path:成功");
+    let image = image.to_string();
+    std::thread::spawn(move ||{
+        info!("Android调用 android_set_wallpaper:{image}");
+        if let Ok(app) = get_app(){
+            let ret = android_set_wallpaper(app.get(), &image);
+            info!("Android调用 android_set_wallpaper: {:?}", ret);
+        }
+    });
     Ok(())
 }
 

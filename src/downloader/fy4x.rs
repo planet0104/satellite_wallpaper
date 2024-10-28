@@ -1,18 +1,16 @@
 use std::{ops::Sub, time::{Duration, Instant}};
-
 use anyhow::{anyhow, Result};
-use async_std::task::{spawn, spawn_blocking};
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
 use log::{error, info};
 use time::{OffsetDateTime, Date};
 
-use crate::{config::{self, Config}, downloader::format_time_str};
+use crate::{config::Config, downloader::format_time_str};
 
 //http://rsapp.nsmc.org.cn/geofy/
 
 
 /// 下载4x4、2x2的图
-pub async fn download<C>(
+pub fn download<C>(
     url: &str,
     d: u32,
     year: i32,
@@ -28,15 +26,15 @@ where
     let total = d*d;
     info!("开始下载图片 共{total}张...");
     let t = Instant::now();
-    let (tx, rx) = async_std::channel::unbounded();
+    let (tx, rx) = std::sync::mpsc::channel();
     let mut count = 0;
     for y in 0..d{
         for x in 0..d{
             let url1 = url.to_string();
             let tx1 = tx.clone();
-            spawn(async move {
-                let ret = download_image(&format_url(&url1, year, month, day, hour, minute, d/2, x, y)).await;
-                let _ = tx1.send((count, ret)).await;
+            std::thread::spawn(move ||{
+                let ret = download_image(&format_url(&url1, year, month, day, hour, minute, d/2, x, y));
+                let _ = tx1.send((count, ret));
             });
             count += 1;
         }
@@ -46,7 +44,7 @@ where
 
     let mut count = 0;
     for _ in 0..total{
-        let r = rx.recv().await;
+        let r = rx.recv();
         if r.is_err(){
             error!("图片下载失败:{:?}", r.err());
             break;
@@ -84,12 +82,10 @@ where
 }
 
 //取一张图片
-pub async fn download_image(url: &str) -> Result<RgbaImage> {
+pub fn download_image(url: &str) -> Result<RgbaImage> {
     info!("download_image {}", url);
     let url = url.to_string();
-    spawn_blocking(move ||{
-        download_image_sync(&url)
-    }).await
+    download_image_sync(&url)
 }
 
 pub fn download_image_sync(url: &str) -> Result<RgbaImage> {
@@ -120,7 +116,7 @@ pub fn format_url(
 }
 
 /// 下载最新图片, 20分钟之前
-pub async fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
+pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
     
     // 从当前时间以15分钟倒推，查询最后可下载的图片
     let now = OffsetDateTime::now_utc();
@@ -133,7 +129,7 @@ pub async fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32,
     let mut try_times = 0;
     while try_times < 4{
         //尝试下载最新一张图片, 递减15分钟
-        let ret = download_image(&format_url(&cfg.download_url_fy4b, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), 1, 0, 0)).await;
+        let ret = download_image(&format_url(&cfg.download_url_fy4b, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), 1, 0, 0));
         if ret.is_err(){
             log::error!("download_image失败: {:?}", ret.err());
             info!("卫星图片不存在，尝试下载更早的图片.");
@@ -150,6 +146,5 @@ pub async fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32,
         return Ok(None);
     }
     cfg.current_wallpaper_date = timestr;
-    config::save(cfg.clone()).await;
-    Ok(Some(download(&cfg.download_url_fy4b, d, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), callback).await?))
+    Ok(Some(download(&cfg.download_url_fy4b, d, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), callback)?))
 }

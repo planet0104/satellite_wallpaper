@@ -1,6 +1,7 @@
 use anyhow::Result;
 use async_std::fs::create_dir;
-use log::{error, info};
+use chrono::{DateTime, Local};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -34,10 +35,8 @@ pub struct Config {
     /// 当前壁纸路径
     pub current_wallpaper_file: String,
 
-    /// 当前壁纸略缩图
-    pub current_wallpaper_thumbnail: Option<String>,
     /// 最后一次保存壁纸壁纸
-    pub last_save_time: Option<String>,
+    pub last_download_timestamp: Option<i64>,
 
     /// 配置文件路径
     pub config_path: String,
@@ -56,28 +55,48 @@ impl Default for Config{
             current_wallpaper_file: String::new(),
             config_path: String::new(),
             satellite_name: String::from("fy4b"),
-            current_wallpaper_thumbnail: None,
-            last_save_time: None
+            last_download_timestamp: None
         }
     }
 }
 
-pub async fn load() -> Config {
-    match read_config().await {
-        Ok(cfg) => cfg,
-        Err(err) => {
-            error!("配置文件读取失败: {:?}", err);
-            Config::default()   
+impl Config{
+    pub fn get_last_update_time_str(&self) -> String{
+        if self.last_download_timestamp.is_none(){
+            return "无".to_string();
+        }
+        if let Some(d) = DateTime::from_timestamp_millis(self.last_download_timestamp.unwrap()){
+            let local_datetime: DateTime<Local> = DateTime::<Local>::from(d);
+            local_datetime.format("%Y/%m/%d %H:%M:%S").to_string()
+        }else{
+            "无".to_string()
         }
     }
-}
+    
+    pub async fn save_to_file(&mut self) -> Result<()> {
+        let cfg_path = get_config_file_path().await;
+        self.config_path = cfg_path.clone();
+        let cfg_str: String = toml::to_string(&self)?;
+        let mut config_file = async_std::fs::File::create(cfg_path).await?;
+        async_std::io::WriteExt::write_all(&mut config_file, cfg_str.as_bytes()).await?;
+        info!("配置文件保存成功 {cfg_str}");
+        Ok(())
+    }
 
-pub async fn save(cfg: Config) {
-    if let Err(err) = write_config(cfg).await {
-        error!("配置保存失败: {:?}", err)
-    }else{
-        // info!("配置保存成功: {:?}", cfg);
-        info!("配置保存成功");
+    pub async fn load_from_file(&mut self) -> Result<()>{
+        let cfg_path = get_config_file_path().await;
+        let mut config_file = async_std::fs::File::open(cfg_path).await?;
+        let mut config_str = String::new();
+        async_std::io::ReadExt::read_to_string(&mut config_file, &mut config_str).await?;
+        *self = toml::from_str(&config_str)?;
+        info!("配置文件读取成功:{config_str}");
+        Ok(())
+    }
+
+    pub async fn load_or_default() -> Config{
+        let mut cfg = Config::default();
+        let _ = cfg.load_from_file().await;
+        cfg
     }
 }
 
@@ -99,21 +118,4 @@ async fn get_config_file_path() -> String {
     }
     // info!("config {:?}", cfg_path_name);
     cfg_path_name
-}
-
-async fn read_config() -> Result<Config> {
-    let cfg_path = get_config_file_path().await;
-    let mut config_file = async_std::fs::File::open(cfg_path).await?;
-    let mut config_str = String::new();
-    async_std::io::ReadExt::read_to_string(&mut config_file, &mut config_str).await?;
-    Ok(toml::from_str(&config_str)?)
-}
-
-async fn write_config(mut cfg: Config) -> Result<()> {
-    let cfg_path = get_config_file_path().await;
-    cfg.config_path = cfg_path.clone();
-    let cfg_str = toml::to_string(&cfg)?;
-    let mut config_file = async_std::fs::File::create(cfg_path).await?;
-    async_std::io::WriteExt::write_all(&mut config_file, cfg_str.as_bytes()).await?;
-    Ok(())
 }
