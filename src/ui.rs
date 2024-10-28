@@ -17,6 +17,7 @@ slint::slint!{
         in-out property <int> current-interval-index: 0;
         in-out property <int> current-size-index: 0;
         in-out property <bool> is-startup: false;
+        in-out property <string> download_status: "下载状态:";
 
         callback change_satellite(int);
         callback change_interval(int);
@@ -43,6 +44,13 @@ slint::slint!{
                                 alignment: center;
                                 Image {
                                     source: source_image;
+                                }
+                            }
+                            HorizontalBox {
+                                alignment: center;
+                                Text {
+                                    color: orange;
+                                    text <=> download_status;
                                 }
                             }
                             Button {
@@ -106,6 +114,13 @@ slint::slint!{
                             }
                             Text {
                                 text: "配置文件:"+config_file;
+                            }
+                            HorizontalBox {
+                                alignment: center;
+                                Text {
+                                    color: orange;
+                                    text <=> download_status;
+                                }
                             }
                             Button {
                                 width: 100%;

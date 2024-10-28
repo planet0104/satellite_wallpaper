@@ -4,13 +4,10 @@ use async_std::task::spawn_blocking;
 use chrono::Timelike;
 use image::{buffer::ConvertBuffer, imageops::resize, GenericImage, RgbImage};
 use log::{info, error};
-use once_cell::sync::Lazy;
 pub mod h8;
 pub mod fy4x;
 
-use crate::{app::{get_app_home_dir, get_screen_size, get_current_wallpaper}, config};
-
-static IS_DOWNLOADING: Lazy<async_std::sync::Mutex<bool>> = Lazy::new(|| async_std::sync::Mutex::new(false));
+use crate::{app::{get_current_wallpaper, get_screen_size, get_wallpaper_file_path}, config, server::{set_download_status, DownloadStatus}};
 
 pub fn format_time_str(download_name:&str, d: u32, year:i32, month:u8, day:u8, hour: u8, minute:u8) -> String{
     format!("{}-D{}-UTC-{}年-{}月-{}日-{}时-{:02}分", download_name, d, year, month, day, hour, (minute/15)*15)
@@ -164,27 +161,25 @@ async fn set_wallpaper<C:Fn(u32, u32) + 'static>(width: u32, height: u32, half: 
 }
 
 pub async fn set_wallpaper_default(){
-    *IS_DOWNLOADING.lock().await = true;
-    let cfg = config::load().await;
+
     // 获取屏幕宽高
     let (screen_width, screen_height) = get_screen_size();
+
+    set_download_status(DownloadStatus::new(true, &format!("开始下载壁纸 屏幕大小:{screen_width}x{screen_height}"))).await;
+
+    let mut cfg = config::load().await;
+    
     //下载最新壁纸
     if let Err(err) = set_wallpaper(screen_width as u32, screen_height as u32, cfg.display_type==2, |i,t|{
             info!("正在下载: {}/{}", i, t);
     }).await{
         error!("壁纸下载失败: {:?}", err);
+        set_download_status(DownloadStatus::new(true, &format!("壁纸下载失败 {:?}", err))).await;
+    }else{
+        cfg.last_save_time = Some(current_time_str());
+        config::save(cfg).await;
+        set_download_status(DownloadStatus::new(true, "壁纸下载成功")).await;
     }
-    *IS_DOWNLOADING.lock().await = false;
-}
-
-pub async fn is_downloading() -> bool{
-    *IS_DOWNLOADING.lock().await
-}
-
-fn get_wallpaper_file_path() -> String {
-    let wallpaper_path_name = format!( "{}/wallpaper.png", get_app_home_dir());
-    info!("wallpaper {:?}", wallpaper_path_name);
-    wallpaper_path_name
 }
 
 async fn fast_resize(src:&RgbImage, dst_width: u32, dst_height: u32) -> RgbImage{
@@ -220,4 +215,8 @@ fn fast_resize_block(src:&RgbImage, dst_width: u32, dst_height: u32) -> RgbImage
         }
     }
     resize(src, dst_width, dst_height, image::imageops::FilterType::Lanczos3)
+}
+
+pub fn current_time_str() -> String{
+    chrono::Local::now().format("%Y/%m/%d %H:%M:%S").to_string()
 }

@@ -36,6 +36,8 @@ pub struct Config {
 
     /// 当前壁纸略缩图
     pub current_wallpaper_thumbnail: Option<String>,
+    /// 最后一次保存壁纸壁纸
+    pub last_save_time: Option<String>,
 
     /// 配置文件路径
     pub config_path: String,
@@ -55,6 +57,7 @@ impl Default for Config{
             config_path: String::new(),
             satellite_name: String::from("fy4b"),
             current_wallpaper_thumbnail: None,
+            last_save_time: None
         }
     }
 }
@@ -82,12 +85,16 @@ async fn get_config_file_path() -> String {
     let cfg_file_name = &format!("{}{}.toml", APP_NAME_E, env!("CARGO_PKG_VERSION"));
     let mut cfg_path_name = cfg_file_name.to_string();
     let cfg_dir = get_config_dir();
-    let my_cfg_dir = format!("{}/{}", cfg_dir, APP_NAME_E);
+    #[cfg(windows)]
+    let sp = "\\";
+    #[cfg(not(windows))]
+    let sp = "/";
+    let my_cfg_dir = format!("{}{sp}{}", cfg_dir, APP_NAME_E);
     if Path::exists(Path::new(&my_cfg_dir)){
-        cfg_path_name = format!("{}/{}", my_cfg_dir, cfg_file_name);
+        cfg_path_name = format!("{}{sp}{}", my_cfg_dir, cfg_file_name);
     }else{
         if let Ok(()) = create_dir(&my_cfg_dir).await{
-            cfg_path_name = format!("{}/{}", my_cfg_dir, cfg_file_name);
+            cfg_path_name = format!("{}{sp}{}", my_cfg_dir, cfg_file_name);
         }
     }
     // info!("config {:?}", cfg_path_name);

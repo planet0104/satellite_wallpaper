@@ -38,6 +38,12 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
+pub fn get_wallpaper_file_path() -> String {
+    let wallpaper_path_name = format!( "{}/wallpaper.png", get_app_home_dir());
+    info!("wallpaper {:?}", wallpaper_path_name);
+    wallpaper_path_name
+}
+
 /// 同步设置锁屏壁纸
 pub fn set_lock_screen_image(image: &str) -> Result<()>{
     info!("Android调用 set_lock_screen_image:{image}");

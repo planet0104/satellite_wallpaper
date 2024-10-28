@@ -22,6 +22,12 @@ pub fn open_file(path: &str){
     }
 }
 
+pub fn get_wallpaper_file_path() -> String {
+    let wallpaper_path_name = format!( "{}\\wallpaper.png", get_app_home_dir());
+    info!("wallpaper {:?}", wallpaper_path_name);
+    wallpaper_path_name
+}
+
 pub fn start_main_window(){
     // 获取当前可执行文件的路径
     let current_exe = std::env::current_exe().unwrap();
