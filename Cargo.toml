@@ -16,7 +16,8 @@ serde = { version = "1.0", features = ["derive"] }
 time = { version = "0.3.36", features = ["macros"] }
 log = "0.4"
 data-encoding = "2.6.0"
-minreq = { version="2.12", features=["https"]}
+minreq = { version="2.12", default-features = false}
+# tinyget = "1.0"
 fast_image_resize = "5.0.0"
 chrono = "0.4.38"
 async-std = "1.13.0"

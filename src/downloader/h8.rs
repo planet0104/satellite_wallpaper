@@ -1,10 +1,10 @@
 use std::time::Instant;
 use anyhow::{anyhow, Result};
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
-use log::{error, info};
+use log::{error, info, warn};
 use time::OffsetDateTime;
 
-use crate::{config::Config, downloader::format_time_str};
+use crate::{config::Config, downloader::{download_image, format_time_str}};
 
 /// 下载4x4、2x2的图，最终大小: 1100x1100 、2200x2200
 pub fn download<C>(
@@ -88,21 +88,6 @@ where
     Ok(big_img)
 }
 
-pub fn download_image(url: &str) -> Result<RgbaImage> {
-    info!("download_image {}", url);
-    let url = url.to_string();
-    download_image_sync(&url)
-}
-
-fn download_image_sync(url: &str) -> Result<RgbaImage> {
-    info!("download_image {}", url);
-    let response = minreq::get(url).with_timeout(10).send()?;
-    let image_data = response.as_bytes();
-    let img = image::load_from_memory(image_data)?.to_rgba8();
-    info!("download_image {} OK:{}x{}", url, img.width(), img.height());
-    Ok(img)
-}
-
 fn format_url(
     url: &str,
     year: i32,
@@ -126,7 +111,7 @@ pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callb
     let timestr = format_time_str(&cfg.satellite_name, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute());
     info!("时间:{}", timestr);
     if cfg.current_wallpaper_date == timestr{
-        info!("壁纸无需重复下载");
+        warn!("壁纸无需重复下载");
         return Ok(None);
     }
     cfg.current_wallpaper_date = timestr;

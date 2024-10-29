@@ -1,9 +1,9 @@
 use std::time::Instant;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_std::task::spawn_blocking;
 use chrono::{Local, Timelike};
-use image::{buffer::ConvertBuffer, imageops::resize, GenericImage, RgbImage};
-use log::{info, error};
+use image::{buffer::ConvertBuffer, imageops::resize, GenericImage, RgbImage, RgbaImage};
+use log::{error, info, warn};
 pub mod h8;
 pub mod fy4x;
 
@@ -163,12 +163,18 @@ fn set_wallpaper<C:Fn(u32, u32) + 'static>(cfg:&mut Config, width: u32, height: 
     paper.save(&wallpaper_file_path)?;
     cfg.current_wallpaper_file = wallpaper_file_path.clone();
     // 设置锁屏
+
+    info!("开始调用set_lock_screen_image>>>>>>>>>>>>");
+
     let loc_res = super::app::set_lock_screen_image(&wallpaper_file_path);
     info!("锁屏设置结果: {:?}", loc_res);
     
+    info!("开始调用set_wallpaper_from_path>>>>>>>>>>>>");
     let loc_res = super::app::set_wallpaper_from_path(&wallpaper_file_path);
     info!("壁纸设置结果: {:?}", loc_res);
     loc_res
+    // warn!("未设置安卓壁纸，直接返回，看看是否会崩溃！");
+    // Ok(())
 }
 
 pub async fn set_wallpaper_default(cfg: &mut Config){
@@ -184,13 +190,17 @@ pub async fn set_wallpaper_default(cfg: &mut Config){
     let display_type = cfg.display_type;
     let cfg_clone = cfg.clone();
 
+    info!("调用 set_wallpaper >> step 001");
     let ret = spawn_blocking(move ||{
         let mut cfg = cfg_clone;
+        info!("调用 set_wallpaper >> step 002");
         let ret = set_wallpaper(&mut cfg, screen_width as u32, screen_height as u32, display_type==2, |i,t|{
                 info!("正在下载: {}/{}", i, t);
         });
+        info!("调用 set_wallpaper >> step 003");
         (cfg, ret)
     }).await;
+    info!("调用 set_wallpaper >> step 004");
     let (mut cfg, ret) = ret;
     //下载最新壁纸
     if let Err(err) = ret{
@@ -199,6 +209,7 @@ pub async fn set_wallpaper_default(cfg: &mut Config){
         cfg.last_download_timestamp = Some(Local::now().timestamp_millis());
         let _ = cfg.save_to_file().await;
     }
+    info!("调用 set_wallpaper >> step 005");
     set_downlading(false);
     info!("下载结束....");
 }
@@ -238,4 +249,41 @@ fn fast_resize_block(src:&RgbImage, dst_width: u32, dst_height: u32) -> RgbImage
 
 pub fn current_time_str() -> String{
     chrono::Local::now().format("%Y/%m/%d %H:%M:%S").to_string()
+}
+
+//取一张图片
+pub fn download_image(url: &str) -> Result<RgbaImage> {
+    info!("download_image {}", url);
+    let url = url.to_string();
+    download_image_sync(&url)
+}
+
+fn download_image_sync(url: &str) -> Result<RgbaImage> {
+    info!("download_image {}", url);
+
+    
+    //  GET /swapQuery/public/tileServer/getTile/fy-4b/full_disk/NatureColor_NoLit/20241029144500/jpg/2/2/3.png HTTP/1.1
+    //     Host: rsapp.nsmc.org.cn
+    //     User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0
+    //     Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8
+    //     Accept-Language: zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2
+    //     Accept-Encoding: gzip, deflate
+    //     Connection: keep-alive
+    //     Upgrade-Insecure-Requests: 1
+    //     Priority: u=0, i 
+     
+     let req = minreq::get(url)
+     .with_timeout(10);
+    let response = 
+    req.send()?;
+    let image_data = response.as_bytes();
+    info!("{url} \n 下载字节长度:{} headers:{:?}", image_data.len(), response.headers);
+    if response.headers.contains_key("content-type"){
+        if response.headers.get("content-type").unwrap() == "text/html"{
+            info!("内容:{:?}", String::from_utf8(image_data.to_vec()));
+        }
+    }
+    let img = image::load_from_memory(image_data)?.to_rgba8();
+    info!("download_image {} OK:{}x{}", url, img.width(), img.height());
+    Ok(img)
 }

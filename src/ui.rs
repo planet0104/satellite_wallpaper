@@ -3,7 +3,7 @@ slint::slint!{
 
     export component Main inherits Window {
         title: "卫星壁纸";
-        icon: @image-url("res/favicon_64.ico");
+        // icon: @image-url("res/favicon_64.ico");
 
         in-out property <image> source_image;
 
@@ -89,7 +89,7 @@ slint::slint!{
                                 current-value: "壁纸样式："+(current-size-index==0?"整张":"半张");
                                 current-index: current-size-index;
                                 selected => {
-                                    change-wallpaper-size(self.current-index)
+                                    change_wallpaper_size(self.current-index)
                                 }
                             }
                             ComboBox {

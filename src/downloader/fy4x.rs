@@ -1,10 +1,10 @@
 use std::{ops::Sub, time::{Duration, Instant}};
 use anyhow::{anyhow, Result};
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
-use log::{error, info};
+use log::{error, info, warn};
 use time::{OffsetDateTime, Date};
 
-use crate::{config::Config, downloader::format_time_str};
+use crate::{config::Config, downloader::{download_image, download_image_sync, format_time_str}};
 
 //http://rsapp.nsmc.org.cn/geofy/
 
@@ -81,22 +81,6 @@ where
     Ok(big_img)
 }
 
-//取一张图片
-pub fn download_image(url: &str) -> Result<RgbaImage> {
-    info!("download_image {}", url);
-    let url = url.to_string();
-    download_image_sync(&url)
-}
-
-pub fn download_image_sync(url: &str) -> Result<RgbaImage> {
-    info!("download_image {}", url);
-    let response = minreq::get(url).with_timeout(10).send()?;
-    let image_data = response.as_bytes();
-    let img = image::load_from_memory(image_data)?.to_rgba8();
-    info!("download_image {} OK:{}x{}", url, img.width(), img.height());
-    Ok(img)
-}
-
 // d 1代表4张图, 2代表16张图
 pub fn format_url(
     url: &str,
@@ -142,7 +126,7 @@ pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callb
     let timestr = format_time_str(&cfg.satellite_name, d, time.year(), time.month() as u8, time.day(), time.hour(), time.minute());
     info!("时间:{}", timestr);
     if cfg.current_wallpaper_date == timestr{
-        info!("壁纸无需重复下载");
+        warn!("壁纸无需重复下载");
         return Ok(None);
     }
     cfg.current_wallpaper_date = timestr;

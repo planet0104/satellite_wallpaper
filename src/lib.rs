@@ -8,18 +8,14 @@ mod ui;
 #[cfg(target_os = "android")]
 #[no_mangle]
 fn android_main(app: slint::android::AndroidApp) {
-    use log::info;
+    use app::{set_activity_ptr, set_vm_ptr, set_window_size};
 
-    info!("android_main<<<<<<<<<<<<<<<< 0001");
     android_logger::init_once(
         android_logger::Config::default().with_max_level(log::LevelFilter::Info),
     );
-    info!("android_main<<<<<<<<<<<<<<<< 0002");
-
-    *app::ANDROID_APP.write().unwrap() = Some(app.clone());
-    info!("android_main<<<<<<<<<<<<<<<< 0003");
+    set_vm_ptr(&app);
+    set_activity_ptr(&app);
+    set_window_size(&app);
     slint::android::init(app.clone()).unwrap();
-    info!("android_main<<<<<<<<<<<<<<<< 0004");
     crate::app::run().unwrap();
-    info!("android_main<<<<<<<<<<<<<<<< 0005");
 }

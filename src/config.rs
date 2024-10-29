@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::{app::get_config_dir, def::{APP_NAME_E, DEFAULT_DOWNLOAD_URL_FY4B, DEFAULT_DOWNLOAD_URL_H8, DEFAULT_SERVER_PORT}};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     /// 壁纸更新时间间隔(分钟)
     pub update_interval: u32,
@@ -77,6 +77,7 @@ impl Config{
         let cfg_path = get_config_file_path().await;
         self.config_path = cfg_path.clone();
         let cfg_str: String = toml::to_string(&self)?;
+        info!("写入文件:{cfg_path}");
         let mut config_file = async_std::fs::File::create(cfg_path).await?;
         async_std::io::WriteExt::write_all(&mut config_file, cfg_str.as_bytes()).await?;
         info!("配置文件保存成功 {cfg_str}");
@@ -85,6 +86,7 @@ impl Config{
 
     pub async fn load_from_file(&mut self) -> Result<()>{
         let cfg_path = get_config_file_path().await;
+        info!("读取文件:{cfg_path}");
         let mut config_file = async_std::fs::File::open(cfg_path).await?;
         let mut config_str = String::new();
         async_std::io::ReadExt::read_to_string(&mut config_file, &mut config_str).await?;

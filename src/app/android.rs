@@ -1,36 +1,57 @@
-use std::sync::RwLock;
+use std::ffi::c_void;
 
 use anyhow::{anyhow, Result};
 use image::{Rgba, RgbaImage};
 use jni::{
-    objects::{AsJArrayRaw, JObject, JString, JValue, JValueGen},
-    sys::{JNIInvokeInterface_, _jobject, jint, jintArray},
+    objects::{JObject, JString, JValue, JValueGen},
+    sys::{JNIInvokeInterface_, _jobject, jint},
     JavaVM,
 };
 use log::info;
-use once_cell::sync::Lazy;
 use slint::android::AndroidApp;
 
 use super::open_main_window;
 
-pub struct AppRef<'a>{
-    app: std::sync::RwLockReadGuard<'a, Option<AndroidApp>>
+pub static mut VM_PTR: usize = 0;
+pub static mut ACTIVITY_PTR: usize = 0;
+pub static mut WINDOW_SIZE: (i32, i32) = (0, 0);
+
+pub fn get_vm() -> Result<JavaVM>{
+    if unsafe { VM_PTR } == 0{
+        return Err(anyhow!("vm指针为空!"));
+    }
+    let vm_ptr: *mut c_void = unsafe { VM_PTR } as *mut c_void;
+    let vm = unsafe { JavaVM::from_raw(vm_ptr as *mut *const JNIInvokeInterface_) }?;
+    Ok(vm)
 }
 
-impl <'a> AppRef<'a>{
-    fn get(&'a self) -> &'a AndroidApp{
-        self.app.as_ref().unwrap()
-    }
+pub fn set_vm_ptr(app: &AndroidApp){
+    unsafe { VM_PTR = app.vm_as_ptr() as usize };
 }
 
-pub static ANDROID_APP: Lazy<RwLock<Option<AndroidApp>>> = Lazy::new(|| RwLock::new(None));
-
-pub fn get_app<'a>() -> Result<AppRef<'a>>{
-    let app: std::sync::RwLockReadGuard<'_, Option<AndroidApp>> = ANDROID_APP.read().map_err(|err| anyhow!("{:?}", err))?;
-    if app.is_none(){
-        return Err(anyhow!("App未初始化!"));
+pub fn get_activity_ptr() -> Result<*mut c_void>{
+    if unsafe { ACTIVITY_PTR } == 0{
+        return Err(anyhow!("ACTIVITY_PTR指针为空!"));
     }
-    Ok(AppRef{ app })
+    let ptr: *mut c_void = unsafe { ACTIVITY_PTR } as *mut c_void;
+    Ok(ptr)
+}
+
+pub fn set_activity_ptr(app: &AndroidApp){
+    unsafe { ACTIVITY_PTR = app.activity_as_ptr() as usize };
+}
+
+pub fn get_native_window_size() -> Result<(i32, i32)>{
+    if unsafe { WINDOW_SIZE.0 == 0 || WINDOW_SIZE.1 == 0}{
+        return Err(anyhow!("WINDOW_SIZE为空!"));
+    }
+    Ok(unsafe { WINDOW_SIZE })
+}
+
+pub fn set_window_size(app: &AndroidApp){
+    if let Some(w) = app.native_window(){
+        unsafe { WINDOW_SIZE = (w.width(), w.height()) };
+    }
 }
 
 pub fn run() -> Result<()> {
@@ -53,13 +74,13 @@ pub fn set_lock_screen_image(image: &str) -> Result<()>{
 // 设置壁纸
 pub fn set_wallpaper_from_path(image: &str) -> Result<()>{
     let image = image.to_string();
+    info!("set_wallpaper_from_path 开始.....");
     std::thread::spawn(move ||{
         info!("Android调用 android_set_wallpaper:{image}");
-        if let Ok(app) = get_app(){
-            let ret = android_set_wallpaper(app.get(), &image);
-            info!("Android调用 android_set_wallpaper: {:?}", ret);
-        }
+        let ret = android_set_wallpaper(&image);
+        info!("Android调用 android_set_wallpaper: {:?}", ret);
     });
+    info!("set_wallpaper_from_path 调用android_set_wallpaper结束.....");
     Ok(())
 }
 
@@ -84,34 +105,31 @@ pub fn remove_app_for_startup(app_name:&str) -> Result<()>{
 }
 
 pub fn get_config_dir() -> String{
-    let app = get_app().unwrap();
-    get_files_dir(&app.get()).unwrap()
+    get_files_dir().unwrap()
 }
 
 pub fn get_app_home_dir() -> String {
-    let app = get_app().unwrap();
-    get_files_dir(&app.get()).unwrap()
+    get_files_dir().unwrap()
 }
 
 pub fn get_screen_size() -> (i32, i32){
-    let app = get_app().unwrap();
-    let size = get_window_size(&app.get());
+    let size = get_window_size();
     info!("Android屏幕大小:{:?}", size);
     size
 }
 
-pub fn get_window_size(app: &AndroidApp) -> (i32, i32){
-    match app.native_window(){
-        None => (1080, 1920),
-        Some(w) => (w.width(), w.height())
+pub fn get_window_size() -> (i32, i32){
+    match get_native_window_size(){
+        Err(_) => (1080, 1920),
+        Ok(w) => w
     }
 } 
 
-pub fn get_files_dir(app: &AndroidApp) -> Result<String> {
+pub fn get_files_dir() -> Result<String> {
     unsafe {
-        let vm = JavaVM::from_raw(app.vm_as_ptr() as *mut *const JNIInvokeInterface_)?;
+        let vm = get_vm()?;
         let mut env = vm.attach_current_thread()?;
-        let activity: JObject<'_> = JObject::from_raw(app.activity_as_ptr() as *mut _jobject);
+        let activity: JObject<'_> = JObject::from_raw(get_activity_ptr()? as *mut _jobject);
 
         let file = env.call_method(activity, "getFilesDir", "()Ljava/io/File;", &[])?;
 
@@ -157,19 +175,19 @@ pub fn get_cache_dir(app: &AndroidApp) -> Result<String> {
     }
 }
 
-pub fn android_set_wallpaper(app: &slint::android::AndroidApp, path:&str) -> Result<()>{
-    if !has_wallpaper_permission(app)?{
-        request_wallpaper_permission(app)?;
+pub fn android_set_wallpaper(path:&str) -> Result<()>{
+    if !has_wallpaper_permission()?{
+        request_wallpaper_permission()?;
         return Err(anyhow!("No Permission"));
     }
-
+    info!("读取文件:{path}");
     let image: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> = image::open(path)?.to_rgba8();
 
     let colors = convert_image_to_vec(&image);
 
-    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut *const JNIInvokeInterface_) }?;
+    let vm = get_vm()?;
     let mut env = vm.attach_current_thread()?;
-    let activity: JObject<'_> = unsafe { JObject::from_raw(app.activity_as_ptr() as *mut _jobject) };
+    let activity: JObject<'_> = unsafe { JObject::from_raw(get_activity_ptr()? as *mut _jobject) };
     let activity_jvalue = JValueGen::try_from(&activity)?;
     let wallpaper_manager = env.call_static_method("android/app/WallpaperManager", "getInstance", "(Landroid/content/Context;)Landroid/app/WallpaperManager;", &[activity_jvalue])?;
     let wallpaper_manager = JObject::try_from(wallpaper_manager)?;
@@ -185,9 +203,9 @@ pub fn android_set_lock_screen_wallpaper(){
 
 }
 
-pub fn check_self_permission(app: &slint::android::AndroidApp, permission: &str) -> Result<bool> {
+pub fn check_self_permission(permission: &str) -> Result<bool> {
     unsafe {
-        let vm = JavaVM::from_raw(app.vm_as_ptr() as *mut *const JNIInvokeInterface_)?;
+        let vm = get_vm()?;
         let mut env = vm.attach_current_thread()?;
         let granted_int = env
             .get_static_field(
@@ -198,7 +216,7 @@ pub fn check_self_permission(app: &slint::android::AndroidApp, permission: &str)
             .i()?;
         // 创建Java字符串
         let permission_str = env.new_string(permission)?;
-        let activity: JObject<'_> = JObject::from_raw(app.activity_as_ptr() as *mut _jobject);
+        let activity: JObject<'_> = JObject::from_raw(get_activity_ptr()? as *mut _jobject);
         let result = env
             .call_method(
                 activity,
@@ -213,14 +231,13 @@ pub fn check_self_permission(app: &slint::android::AndroidApp, permission: &str)
 
 
 pub fn request_permissions(
-    app: &slint::android::AndroidApp,
     permissions: &[&str],
     request_code: i32,
 ) -> Result<()> {
     unsafe {
-        let vm = JavaVM::from_raw(app.vm_as_ptr() as *mut *const JNIInvokeInterface_)?;
+        let vm = get_vm()?;
         let mut env = vm.attach_current_thread()?;
-        let activity: JObject<'_> = JObject::from_raw(app.activity_as_ptr() as *mut _jobject);
+        let activity: JObject<'_> = JObject::from_raw(get_activity_ptr()? as *mut _jobject);
 
         // 创建一个Java String数组
         let permission_count = permissions.len() as jint;
@@ -245,12 +262,12 @@ pub fn request_permissions(
     Ok(())
 }
 
-pub fn has_wallpaper_permission(app: &slint::android::AndroidApp) -> Result<bool> {
-    let sdk_version = sdk_version(app)?;
+pub fn has_wallpaper_permission() -> Result<bool> {
+    let sdk_version = sdk_version()?;
     info!("sdk version:{sdk_version}");
     let permission = "android.permission.SET_WALLPAPER";
     if sdk_version > 23 {
-        if !check_self_permission(app, permission)? {
+        if !check_self_permission(permission)? {
             return Ok(false)
         }else{
             Ok(true)
@@ -260,21 +277,21 @@ pub fn has_wallpaper_permission(app: &slint::android::AndroidApp) -> Result<bool
     }
 }
 
-pub fn request_wallpaper_permission(app: &slint::android::AndroidApp) -> Result<()> {
-    let sdk_version = sdk_version(app)?;
+pub fn request_wallpaper_permission() -> Result<()> {
+    let sdk_version = sdk_version()?;
     info!("sdk version:{sdk_version}");
     let permission = "android.permission.SET_WALLPAPER";
     if sdk_version > 23 {
-        if !check_self_permission(app, permission)? {
-            request_permissions(app, &[permission], 100)?;
+        if !check_self_permission(permission)? {
+            request_permissions(&[permission], 100)?;
         }
     }
     Ok(())
 }
 
-pub fn sdk_version(app: &slint::android::AndroidApp) -> Result<i32> {
+pub fn sdk_version() -> Result<i32> {
     unsafe {
-        let vm = JavaVM::from_raw(app.vm_as_ptr() as *mut *const JNIInvokeInterface_)?;
+        let vm = get_vm()?;
         let mut env = vm.attach_current_thread()?;
         Ok(env
             .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
