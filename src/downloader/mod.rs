@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use async_std::task::spawn_blocking;
 use chrono::{Local, Timelike};
 use image::{buffer::ConvertBuffer, imageops::resize, GenericImage, RgbImage, RgbaImage};
-use log::{error, info, warn};
+use log::{error, info};
 pub mod h8;
 pub mod fy4x;
 
@@ -29,13 +29,7 @@ pub fn format_time_str(download_name:&str, d: u32, year:i32, month:u8, day:u8, h
     format!("{}-D{}-UTC-{}年-{}月-{}日-{}时-{:02}分", download_name, d, year, month, day, hour, (minute/15)*15)
 }
 
-fn set_wallpaper<C:Fn(u32, u32) + 'static>(cfg:&mut Config, width: u32, height: u32, half: bool, callback: C) -> Result<()>{
-    //保存原有壁纸路径
-    if cfg.old_wallpaper.len() == 0{
-        if let Ok(old) = get_current_wallpaper(){
-            cfg.old_wallpaper = old;
-        }
-    }
+fn set_wallpaper<C:Fn(u32, u32) + 'static>(cfg:&Config, width: u32, height: u32, half: bool, callback: C) -> Result<String>{
     info!("set_wallpaper>>准备下载 {width}x{height}...");
     //创建一张黑色背景图片
     let mut paper = RgbImage::new(width, height);
@@ -47,9 +41,10 @@ fn set_wallpaper<C:Fn(u32, u32) + 'static>(cfg:&mut Config, width: u32, height: 
         };
     if image.is_none(){
         error!("set_wallpaper>>图片下载失败 {width}x{height} image.is_none()");
-        return Ok(());
+        return Err(anyhow!("图片下载失败."));
     }
-    let mut image:RgbImage = image.unwrap().convert();
+    let (timestr, mut image) = image.unwrap();
+    let mut image:RgbImage = image.convert();
 
     //横屏模式
     let _image = if height < width || !half{
@@ -161,7 +156,6 @@ fn set_wallpaper<C:Fn(u32, u32) + 'static>(cfg:&mut Config, width: u32, height: 
     let wallpaper_file_path = get_wallpaper_file_path();
     info!("set_wallpaper>>wallpaper_file_path {wallpaper_file_path}");
     paper.save(&wallpaper_file_path)?;
-    cfg.current_wallpaper_file = wallpaper_file_path.clone();
     // 设置锁屏
 
     info!("开始调用set_lock_screen_image>>>>>>>>>>>>");
@@ -172,9 +166,8 @@ fn set_wallpaper<C:Fn(u32, u32) + 'static>(cfg:&mut Config, width: u32, height: 
     info!("开始调用set_wallpaper_from_path>>>>>>>>>>>>");
     let loc_res = super::app::set_wallpaper_from_path(&wallpaper_file_path);
     info!("壁纸设置结果: {:?}", loc_res);
-    loc_res
-    // warn!("未设置安卓壁纸，直接返回，看看是否会崩溃！");
-    // Ok(())
+    loc_res?;
+    Ok(timestr)
 }
 
 pub async fn set_wallpaper_default(cfg: &mut Config){
@@ -191,6 +184,14 @@ pub async fn set_wallpaper_default(cfg: &mut Config){
     let cfg_clone = cfg.clone();
 
     info!("调用 set_wallpaper >> step 001");
+
+    //保存原有壁纸路径
+    if cfg.old_wallpaper.len() == 0{
+        if let Ok(old) = get_current_wallpaper(){
+            cfg.old_wallpaper = old;
+        }
+    }
+
     let ret = spawn_blocking(move ||{
         let mut cfg = cfg_clone;
         info!("调用 set_wallpaper >> step 002");
@@ -203,13 +204,17 @@ pub async fn set_wallpaper_default(cfg: &mut Config){
     info!("调用 set_wallpaper >> step 004");
     let (mut cfg, ret) = ret;
     //下载最新壁纸
-    if let Err(err) = ret{
-        error!("壁纸下载失败: {:?}", err);
-    }else{
-        cfg.last_download_timestamp = Some(Local::now().timestamp_millis());
-        let _ = cfg.save_to_file().await;
+    match ret{
+        Ok(timestr) => {
+            cfg.current_wallpaper_file = get_wallpaper_file_path();
+            cfg.current_wallpaper_date = timestr;
+            cfg.last_download_timestamp = Some(Local::now().timestamp_millis());
+        }
+        Err(err) => {
+            error!("壁纸下载失败: {:?}", err);
+        }
     }
-    info!("调用 set_wallpaper >> step 005");
+    let _ = cfg.save_to_file().await;
     set_downlading(false);
     info!("下载结束....");
 }

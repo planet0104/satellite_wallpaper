@@ -55,8 +55,17 @@ async fn update_ui(app: Weak<crate::ui::Main>, cfg: Arc<Mutex<Config>>){
             None => return
         };
         let cfg = {
-            cfg.lock().await.clone()
+            let mut cfg_lock = cfg.lock().await;
+            let old_tab_index = app.get_old_tab_index();
+            let current_tab_index = app.get_tab_index();
+            if old_tab_index != current_tab_index{
+                info!("tab切换，读取了配置文件...");
+                app.set_old_tab_index(current_tab_index);
+                let _ = cfg_lock.load_from_file().await;
+            }
+            cfg_lock.clone()
         };
+        
         app.set_wallpaper_file(cfg.current_wallpaper_file.as_str().into());
         app.set_h8_data_url(cfg.download_url_h8.as_str().into());
         app.set_f4a_data_url(cfg.download_url_fy4b.as_str().into());
@@ -72,26 +81,26 @@ async fn update_ui(app: Weak<crate::ui::Main>, cfg: Arc<Mutex<Config>>){
             app.set_download_status("正在下载壁纸...".into());
         }else{
             app.set_download_status(format!("上次更新: {}", cfg.get_last_update_time_str()).into());
-            // if current_wallpaper_date != cfg.current_wallpaper_date{
-            //     warn!("Timer 未下载 需要更新图片...");
-            //     app.set_current_wallpaper(cfg.current_wallpaper_date.as_str().into());
-            //     warn!("Timer 未下载 打开图片文件...");
-            //     let url = cfg.current_wallpaper_file.to_string();
-            //     let t = Instant::now();
-            //     warn!("Timer 未下载 打开图片文件 01...");
-            //     let buf = open_wall_paper_image(&url).await;
-            //     warn!("Timer 未下载 打开图片文件 02...");
-            //     if buf.is_err(){
-            //         error!("图片读取失败:{:?}", buf.err());
-            //         return;
-            //     }
-            //     let buf = buf.unwrap();
-            //     info!("加载图片耗时:{}ms", t.elapsed().as_millis());
-            //     let t = Instant::now();
-            //     let new_image = Image::from_rgb8(buf);
-            //     app.set_source_image(new_image);
-            //     info!("渲染图片耗时:{}ms", t.elapsed().as_millis());
-            // }
+            if current_wallpaper_date != cfg.current_wallpaper_date{
+                warn!("Timer 未下载 需要更新图片...");
+                app.set_current_wallpaper(cfg.current_wallpaper_date.as_str().into());
+                warn!("Timer 未下载 打开图片文件...");
+                let url = cfg.current_wallpaper_file.to_string();
+                let t = Instant::now();
+                warn!("Timer 未下载 打开图片文件 01...");
+                let buf = open_wall_paper_image(&url).await;
+                warn!("Timer 未下载 打开图片文件 02...");
+                if buf.is_err(){
+                    error!("图片读取失败:{:?}", buf.err());
+                    return;
+                }
+                let buf = buf.unwrap();
+                info!("加载图片耗时:{}ms", t.elapsed().as_millis());
+                let t = Instant::now();
+                let new_image = Image::from_rgb8(buf);
+                app.set_source_image(new_image);
+                info!("渲染图片耗时:{}ms", t.elapsed().as_millis());
+            }
         }
         info!("timer 更新...");
         async_std::task::sleep(Duration::from_millis(3000)).await;
@@ -167,12 +176,19 @@ pub fn open_main_window(){
     app.on_change_wallpaper_size(move |select_index| {
         let config_clone = config_clone.clone();
         let _ = slint::spawn_local(async move {
-            let mut cfg = config_clone.lock().await;
+            let mut cfg = {
+                config_clone.lock().await.clone()
+            };
             cfg.display_type = select_index as u32 + 1;
             info!("修改壁纸大小，保存配置...");
             cfg.current_wallpaper_date = "".to_string();
             let _ = cfg.save_to_file().await;
-            info!("修改壁纸大小，配置保存结束:{:?}", *cfg);
+            info!("修改壁纸大小，配置保存结束:{:?}", cfg);
+
+            //立即更新
+            info!("修改了壁纸大小 立即更新壁纸...");
+            downloader::set_wallpaper_default(&mut cfg).await;
+            info!("修改了壁纸大小 壁纸更新完成...");
         });
     });
 

@@ -4,7 +4,7 @@ use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
 use log::{error, info, warn};
 use time::{OffsetDateTime, Date};
 
-use crate::{config::Config, downloader::{download_image, download_image_sync, format_time_str}};
+use crate::{config::Config, downloader::{download_image, format_time_str}};
 
 //http://rsapp.nsmc.org.cn/geofy/
 
@@ -100,7 +100,7 @@ pub fn format_url(
 }
 
 /// 下载最新图片, 20分钟之前
-pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
+pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &Config, d:u32, callback:C ) -> Result<Option<(String, RgbaImage)>>{
     
     // 从当前时间以15分钟倒推，查询最后可下载的图片
     let now = OffsetDateTime::now_utc();
@@ -129,6 +129,6 @@ pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callb
         warn!("壁纸无需重复下载");
         return Ok(None);
     }
-    cfg.current_wallpaper_date = timestr;
-    Ok(Some(download(&cfg.download_url_fy4b, d, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), callback)?))
+    let img = download(&cfg.download_url_fy4b, d, time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), callback)?;
+    Ok(Some((timestr, img)))
 }

@@ -18,6 +18,8 @@ slint::slint!{
         in-out property <int> current-size-index: 0;
         in-out property <bool> is-startup: false;
         in-out property <string> download_status: "下载状态:";
+        out property <int> tab-index: 0;
+        in-out property <int> old-tab-index: 99;
 
         callback change_satellite(int);
         callback change_interval(int);
@@ -32,7 +34,7 @@ slint::slint!{
         Rectangle {
             TabWidget {
                 height: 100%;
-                current-index: 0;
+                current-index <=> tab-index;
                 Tab {
                     title: "　　　　首页 🌏　　　　";
                     Rectangle {

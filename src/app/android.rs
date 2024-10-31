@@ -128,7 +128,7 @@ pub fn get_window_size() -> (i32, i32){
 pub fn get_files_dir() -> Result<String> {
     unsafe {
         let vm = get_vm()?;
-        let mut env = vm.attach_current_thread()?;
+        let mut env = vm.attach_current_thread_as_daemon()?;
         let activity: JObject<'_> = JObject::from_raw(get_activity_ptr()? as *mut _jobject);
 
         let file = env.call_method(activity, "getFilesDir", "()Ljava/io/File;", &[])?;
@@ -153,7 +153,7 @@ pub fn get_files_dir() -> Result<String> {
 pub fn get_cache_dir(app: &AndroidApp) -> Result<String> {
     unsafe {
         let vm = JavaVM::from_raw(app.vm_as_ptr() as *mut *const JNIInvokeInterface_)?;
-        let mut env = vm.attach_current_thread()?;
+        let mut env = vm.attach_current_thread_as_daemon()?;
         let activity: JObject<'_> = JObject::from_raw(app.activity_as_ptr() as *mut _jobject);
 
         let file = env.call_method(activity, "getCacheDir", "()Ljava/io/File;", &[])?;
@@ -180,22 +180,27 @@ pub fn android_set_wallpaper(path:&str) -> Result<()>{
         request_wallpaper_permission()?;
         return Err(anyhow!("No Permission"));
     }
-    info!("读取文件:{path}");
-    let image: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> = image::open(path)?.to_rgba8();
-
-    let colors = convert_image_to_vec(&image);
 
     let vm = get_vm()?;
-    let mut env = vm.attach_current_thread()?;
+    let mut env = vm.attach_current_thread_as_daemon()?;
     let activity: JObject<'_> = unsafe { JObject::from_raw(get_activity_ptr()? as *mut _jobject) };
     let activity_jvalue = JValueGen::try_from(&activity)?;
     let wallpaper_manager = env.call_static_method("android/app/WallpaperManager", "getInstance", "(Landroid/content/Context;)Landroid/app/WallpaperManager;", &[activity_jvalue])?;
     let wallpaper_manager = JObject::try_from(wallpaper_manager)?;
 
-    let bitmap = create_java_bitmap_form_colors(vm.attach_current_thread()?, &colors, image.width() as i32, image.height() as i32)?;
-    let bitmap_j = JValueGen::try_from(&bitmap)?;
+    // info!("读取文件:{path}");
+    // let image: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> = image::open(path)?.to_rgba8();
+    // let colors = convert_image_to_vec(&image);
+    // let bitmap = create_java_bitmap_form_colors(vm.attach_current_thread_as_daemon()?, &colors, image.width() as i32, image.height() as i32)?;
+    // let bitmap_j = JValueGen::try_from(&bitmap)?;
 
-    let _ = env.call_method(wallpaper_manager, "setBitmap", "(Landroid/graphics/Bitmap;)V", &[bitmap_j])?.v()?;
+    // let _ = env.call_method(wallpaper_manager, "setBitmap", "(Landroid/graphics/Bitmap;)V", &[bitmap_j])?.v()?;
+
+    let class = env.find_class("java/io/FileInputStream")?;
+    let path_str = env.new_string(path)?;
+    let stream = env.new_object(class, "(Ljava/lang/String;)V", &[JValueGen::try_from(&path_str)?])?;
+
+    let _ = env.call_method(wallpaper_manager, "setStream", "(Ljava/io/InputStream;)V", &[JValueGen::try_from(&stream)?])?.v()?;
     Ok(())
 }
 
@@ -206,7 +211,7 @@ pub fn android_set_lock_screen_wallpaper(){
 pub fn check_self_permission(permission: &str) -> Result<bool> {
     unsafe {
         let vm = get_vm()?;
-        let mut env = vm.attach_current_thread()?;
+        let mut env = vm.attach_current_thread_as_daemon()?;
         let granted_int = env
             .get_static_field(
                 "android/content/pm/PackageManager",
@@ -236,7 +241,7 @@ pub fn request_permissions(
 ) -> Result<()> {
     unsafe {
         let vm = get_vm()?;
-        let mut env = vm.attach_current_thread()?;
+        let mut env = vm.attach_current_thread_as_daemon()?;
         let activity: JObject<'_> = JObject::from_raw(get_activity_ptr()? as *mut _jobject);
 
         // 创建一个Java String数组
@@ -292,7 +297,7 @@ pub fn request_wallpaper_permission() -> Result<()> {
 pub fn sdk_version() -> Result<i32> {
     unsafe {
         let vm = get_vm()?;
-        let mut env = vm.attach_current_thread()?;
+        let mut env = vm.attach_current_thread_as_daemon()?;
         Ok(env
             .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
             .i()?)

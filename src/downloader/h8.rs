@@ -103,7 +103,7 @@ fn format_url(
 }
 
 /// 下载最新图片, 20分钟之前
-pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callback:C ) -> Result<Option<RgbaImage>>{
+pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &Config, d:u32, callback:C ) -> Result<Option<(String, RgbaImage)>>{
     let mut timestamp = OffsetDateTime::now_utc().unix_timestamp();
     //减去20分钟
     timestamp -= 20 * 60 * 1000;
@@ -114,6 +114,6 @@ pub fn download_lastest<C:Fn(u32, u32) + 'static>(cfg: &mut Config, d:u32, callb
         warn!("壁纸无需重复下载");
         return Ok(None);
     }
-    cfg.current_wallpaper_date = timestr;
-    Ok(Some(download(&cfg.download_url_h8, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute(), callback)?))
+    let img = download(&cfg.download_url_h8, d, utc.year(), utc.month() as u8, utc.day(), utc.hour(), utc.minute(), callback)?;
+    Ok(Some((timestr, img)))
 }
